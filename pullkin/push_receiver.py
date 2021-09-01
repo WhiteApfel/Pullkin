@@ -354,7 +354,7 @@ async def __listen(s, credentials, callback, persistent_ids, obj, timer=0, is_al
             await asyncio.sleep(timer)
 
 
-async def listen(credentials, callback, received_persistent_ids=[], obj=None, timer=0, is_alive=True):
+async def listen(credentials, callback, received_persistent_ids=None, obj=None, timer=0, is_alive=True):
     """
     listens for push notifications
 
@@ -364,6 +364,8 @@ async def listen(credentials, callback, received_persistent_ids=[], obj=None, ti
                              array of strings
     obj: optional arbitrary value passed to callback
     """
+    if received_persistent_ids is None:
+        received_persistent_ids = []
     import socket
     import ssl
     HOST = "mtalk.google.com"
