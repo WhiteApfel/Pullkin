@@ -10,4 +10,4 @@ python:
 install: pip install .[listen,example]
 
 script:
-  - python -m "push_receiver" --sender-id=722915550290 --no-listen
+  - python -m "pullkin" --sender-id=722915550290 --no-listen

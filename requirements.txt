@@ -1,0 +1,2 @@
+oscrypto~=1.2.1
+setuptools~=57.4.0

@@ -6,7 +6,8 @@
 # means.
 #
 # For more information, please refer to <http://unlicense.org/>
-
+import asyncio
+import inspect
 import json
 import logging
 import os
@@ -28,7 +29,7 @@ from urllib.parse import urlencode
 
 unicode = str
 
-__log = logging.getLogger("push_receiver")
+__log = logging.getLogger("pullkin")
 
 SERVER_KEY = (
         b"\x04\x33\x94\xf7\xdf\xa1\xeb\xb1\xdc\x03\xa2\x5e\x15\x71\xdb\x48\xd3"
@@ -302,7 +303,7 @@ def __app_data_by_key(p, key, blow_shit_up=True):
     return None
 
 
-def __listen(s, credentials, callback, persistent_ids, obj, timer=0):
+async def __listen(s, credentials, callback, persistent_ids, obj, timer=0, is_alive=True):
     import http_ece
     import cryptography.hazmat.primitives.serialization as serialization
     from cryptography.hazmat.backends import default_backend
@@ -324,7 +325,7 @@ def __listen(s, credentials, callback, persistent_ids, obj, timer=0):
     req.received_persistent_id.extend(persistent_ids)
     __send(s, req)
     login_response = __recv(s, first=True)
-    while True:
+    while is_alive:
         p = __recv(s)
         if type(p) is not DataMessageStanza:
             continue
@@ -345,12 +346,15 @@ def __listen(s, credentials, callback, persistent_ids, obj, timer=0):
             version="aesgcm",
             auth_secret=secret
         )
-        callback(obj, json.loads(decrypted.decode("utf-8")), p)
+        if inspect.iscoroutinefunction(callback):
+            await callback(obj, json.loads(decrypted.decode("utf-8")), p)
+        else:
+            callback(obj, json.loads(decrypted.decode("utf-8")), p)
         if timer:
-            time.sleep(timer)
+            await asyncio.sleep(timer)
 
 
-def listen(credentials, callback, received_persistent_ids=[], obj=None, timer=0):
+async def listen(credentials, callback, received_persistent_ids=[], obj=None, timer=0, is_alive=True):
     """
     listens for push notifications
 
@@ -367,7 +371,7 @@ def listen(credentials, callback, received_persistent_ids=[], obj=None, timer=0)
     sock = socket.create_connection((HOST, 5228))
     s = context.wrap_socket(sock, server_hostname=HOST)
     __log.debug("connected to ssl socket")
-    __listen(s, credentials, callback, received_persistent_ids, obj, timer)
+    await __listen(s, credentials, callback, received_persistent_ids, obj, timer, is_alive)
     s.close()
     sock.close()
 

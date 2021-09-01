@@ -9,11 +9,11 @@ push_receiver_classifiers = [
 ]
 
 with open("README.rst", "r") as f:
-  push_receiver_readme = f.read()
+    push_receiver_readme = f.read()
 
 setup(
     name="pullkin",
-    version="0.1.1",
+    version="0.1.3",
     author="Franc[e]sco & WhiteApfel",
     author_email="white@pfel.ru",
     url="https://github.com/WhiteApfel/Pullkin",
