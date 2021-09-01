@@ -368,10 +368,10 @@ async def listen(credentials, callback, received_persistent_ids=None, obj=None, 
         received_persistent_ids = []
     import socket
     import ssl
-    HOST = "mtalk.google.com"
+    host = "mtalk.google.com"
     context = ssl.create_default_context()
-    sock = socket.create_connection((HOST, 5228))
-    s = context.wrap_socket(sock, server_hostname=HOST)
+    sock = socket.create_connection((host, 5228))
+    s = context.wrap_socket(sock, server_hostname=host)
     __log.debug("connected to ssl socket")
     await __listen(s, credentials, callback, received_persistent_ids, obj, timer, is_alive)
     s.close()
