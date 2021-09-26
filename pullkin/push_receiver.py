@@ -14,6 +14,7 @@ import os
 import struct
 import time
 import uuid
+from asyncio import StreamWriter, StreamReader
 from base64 import urlsafe_b64encode, urlsafe_b64decode
 from binascii import hexlify
 
@@ -229,6 +230,12 @@ def __read(s, size):
     return buf
 
 
+async def __aioread(reader: StreamReader, size):
+    buf = b''
+    while len(buf) < size:
+        buf += await reader.read(size - len(buf))
+    return buf
+
 # protobuf variable length integers are encoded in base 128
 # each byte contains 7 bits of the integer and the msb is set if there's
 # more. pretty simple to implement
@@ -239,6 +246,18 @@ def __read_varint32(s):
     shift = 0
     while True:
         b, = struct.unpack("B", __read(s, 1))
+        res |= (b & 0x7F) << shift
+        if (b & 0x80) == 0:
+            break
+        shift += 7
+    return res
+
+
+async def __aioread_varint32(reader: StreamReader):
+    res = 0
+    shift = 0
+    while True:
+        b, = struct.unpack("B", await __aioread(reader, 1))
         res |= (b & 0x7F) << shift
         if (b & 0x80) == 0:
             break
@@ -272,6 +291,17 @@ def __send(s, packet):
         total += sent
 
 
+async def __aiosend(writer: StreamWriter, packet):
+    header = bytearray([MCS_VERSION, PACKET_BY_TAG.index(type(packet))])
+    __log.debug(packet)
+    payload = packet.SerializeToString()
+    buf = bytes(header) + __encode_varint32(len(payload)) + payload
+    __log.debug(hexlify(buf))
+    n = len(buf)
+    writer.write(buf)
+    await writer.drain()
+
+
 def __recv(s, first=False):
     if first:
         version, tag = struct.unpack("BB", __read(s, 2))
@@ -285,6 +315,28 @@ def __recv(s, first=False):
     __log.debug("size {}".format(size))
     if size >= 0:
         buf = __read(s, size)
+        __log.debug(hexlify(buf))
+        Packet = PACKET_BY_TAG[tag]
+        payload = Packet()
+        payload.ParseFromString(buf)
+        __log.debug(payload)
+        return payload
+    return None
+
+
+async def __aiorecv(reader: StreamReader, first=False):
+    if first:
+        version, tag = struct.unpack("BB", await __aioread(reader, 2))
+        __log.debug("version {}".format(version))
+        if version < MCS_VERSION and version != 38:
+            raise RuntimeError("protocol version {} unsupported".format(version))
+    else:
+        tag, = struct.unpack("B", await __aioread(reader, 1))
+    __log.debug("tag {} ({})".format(tag, PACKET_BY_TAG[tag]))
+    size = await __aioread_varint32(reader)
+    __log.debug("size {}".format(size))
+    if size >= 0:
+        buf = await __aioread(reader, size)
         __log.debug(hexlify(buf))
         Packet = PACKET_BY_TAG[tag]
         payload = Packet()
@@ -354,6 +406,57 @@ async def __listen(s, credentials, callback, persistent_ids, obj, timer=0, is_al
             await asyncio.sleep(timer)
 
 
+async def __aiolisten(reader, writer, credentials, callback, persistent_ids, obj, timer=0, is_alive=True):
+    import http_ece
+    import cryptography.hazmat.primitives.serialization as serialization
+    from cryptography.hazmat.backends import default_backend
+    load_der_private_key = serialization.load_der_private_key
+
+    gcm_check_in(**credentials["gcm"])
+    req = LoginRequest()
+    req.adaptive_heartbeat = False
+    req.auth_service = 2
+    req.auth_token = credentials["gcm"]["securityToken"]
+    req.id = "chrome-91.0.3234.0"
+    req.domain = "mcs.android.com"
+    req.device_id = "android-%x" % int(credentials["gcm"]["androidId"])
+    req.network_type = 1
+    req.resource = credentials["gcm"]["androidId"]
+    req.user = credentials["gcm"]["androidId"]
+    req.use_rmq2 = True
+    req.setting.add(name="new_vc", value="1")
+    req.received_persistent_id.extend(persistent_ids)
+    await __aiosend(writer, req)
+    login_response = await __aiorecv(reader, first=True)
+    while is_alive:
+        p = await __aiorecv(reader)
+        if type(p) is not DataMessageStanza:
+            continue
+        crypto_key = __app_data_by_key(p, "crypto-key")[3:]  # strip dh=
+        salt = __app_data_by_key(p, "encryption")[5:]  # strip salt=
+        crypto_key = urlsafe_b64decode(crypto_key.encode("ascii"))
+        salt = urlsafe_b64decode(salt.encode("ascii"))
+        der_data = credentials["keys"]["private"]
+        der_data = urlsafe_b64decode(der_data.encode("ascii") + b"========")
+        secret = credentials["keys"]["secret"]
+        secret = urlsafe_b64decode(secret.encode("ascii") + b"========")
+        privkey = load_der_private_key(
+            der_data, password=None, backend=default_backend()
+        )
+        decrypted = http_ece.decrypt(
+            p.raw_data, salt=salt,
+            private_key=privkey, dh=crypto_key,
+            version="aesgcm",
+            auth_secret=secret
+        )
+        if inspect.iscoroutinefunction(callback):
+            await callback(obj, json.loads(decrypted.decode("utf-8")), p)
+        else:
+            callback(obj, json.loads(decrypted.decode("utf-8")), p)
+        if timer:
+            await asyncio.sleep(timer)
+
+
 async def listen(credentials, callback, received_persistent_ids=None, obj=None, timer=0, is_alive=True):
     """
     listens for push notifications
@@ -377,3 +480,27 @@ async def listen(credentials, callback, received_persistent_ids=None, obj=None, 
     s.close()
     sock.close()
 
+
+async def aiolisten(credentials, callback, received_persistent_ids=None, obj=None, timer=0, is_alive=True):
+    """
+    listens for push notifications
+
+    credentials: credentials object returned by register()
+    callback(obj, notification, data_message): called on notifications
+    received_persistent_ids: any persistent id's you already received.
+                             array of strings
+    obj: optional arbitrary value passed to callback
+    """
+    if received_persistent_ids is None:
+        received_persistent_ids = []
+    import socket
+    import ssl
+    host = "mtalk.google.com"
+    context = ssl.create_default_context()
+    sock = socket.create_connection((host, 5228))
+    ssl_ctx = ssl.create_default_context()
+    reader, writer = await asyncio.open_connection(host, 5228, ssl=ssl_ctx)
+    __log.debug("connected to ssl socket")
+    await __aiolisten(reader, writer, credentials, callback, received_persistent_ids, obj, timer, is_alive)
+    writer.close()
+    await writer.wait_closed()
