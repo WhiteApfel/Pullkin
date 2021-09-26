@@ -16,7 +16,7 @@ class Pullkin(PullkinBase):
         ...
 
     def __read(self, s, size):
-        buf = b''
+        buf = b""
         while len(buf) < size:
             buf += s.recv(size - len(buf))
         return buf
@@ -25,7 +25,7 @@ class Pullkin(PullkinBase):
         res = 0
         shift = 0
         while True:
-            b, = struct.unpack("B", self.__read(s, 1))
+            (b,) = struct.unpack("B", self.__read(s, 1))
             res |= (b & 0x7F) << shift
             if (b & 0x80) == 0:
                 break
@@ -53,7 +53,7 @@ class Pullkin(PullkinBase):
             if version < self.MCS_VERSION and version != 38:
                 raise RuntimeError("protocol version {} unsupported".format(version))
         else:
-            tag, = struct.unpack("B", self.__read(s, 1))
+            (tag,) = struct.unpack("B", self.__read(s, 1))
         self.__log.debug("tag {} ({})".format(tag, self.PACKET_BY_TAG[tag]))
         size = self.__read_varint32(s)
         self.__log.debug("size {}".format(size))
@@ -67,10 +67,13 @@ class Pullkin(PullkinBase):
             return payload
         return None
 
-    def __listen(self, s, credentials, callback, persistent_ids, obj, timer=0, is_alive=True):
+    def __listen(
+        self, s, credentials, callback, persistent_ids, obj, timer=0, is_alive=True
+    ):
         import http_ece
         import cryptography.hazmat.primitives.serialization as serialization
         from cryptography.hazmat.backends import default_backend
+
         load_der_private_key = serialization.load_der_private_key
 
         self.gcm_check_in(**credentials["gcm"])
@@ -105,10 +108,12 @@ class Pullkin(PullkinBase):
                 der_data, password=None, backend=default_backend()
             )
             decrypted = http_ece.decrypt(
-                p.raw_data, salt=salt,
-                private_key=privkey, dh=crypto_key,
+                p.raw_data,
+                salt=salt,
+                private_key=privkey,
+                dh=crypto_key,
                 version="aesgcm",
-                auth_secret=secret
+                auth_secret=secret,
             )
             if inspect.iscoroutinefunction(callback):
                 asyncio.run(callback(obj, json.loads(decrypted.decode("utf-8")), p))
@@ -117,7 +122,15 @@ class Pullkin(PullkinBase):
             if timer:
                 time.sleep(timer)
 
-    def listen(self, credentials, callback, received_persistent_ids=None, obj=None, timer=0, is_alive=True):
+    def listen(
+        self,
+        credentials,
+        callback,
+        received_persistent_ids=None,
+        obj=None,
+        timer=0,
+        is_alive=True,
+    ):
         """
         listens for push notifications
 
@@ -131,11 +144,14 @@ class Pullkin(PullkinBase):
             received_persistent_ids = []
         import socket
         import ssl
+
         host = "mtalk.google.com"
         context = ssl.create_default_context()
         sock = socket.create_connection((host, 5228))
         s = context.wrap_socket(sock, server_hostname=host)
         self.__log.debug("connected to ssl socket")
-        self.__listen(s, credentials, callback, received_persistent_ids, obj, timer, is_alive)
+        self.__listen(
+            s, credentials, callback, received_persistent_ids, obj, timer, is_alive
+        )
         s.close()
         sock.close()

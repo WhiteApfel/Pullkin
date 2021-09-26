@@ -15,7 +15,7 @@ class AioPullkin(PullkinBase):
         ...
 
     async def __aioread(self, reader: StreamReader, size):
-        buf = b''
+        buf = b""
         while len(buf) < size:
             buf += await reader.read(size - len(buf))
         return buf
@@ -24,7 +24,7 @@ class AioPullkin(PullkinBase):
         res = 0
         shift = 0
         while True:
-            b, = struct.unpack("B", await self.__aioread(reader, 1))
+            (b,) = struct.unpack("B", await self.__aioread(reader, 1))
             res |= (b & 0x7F) << shift
             if (b & 0x80) == 0:
                 break
@@ -62,7 +62,7 @@ class AioPullkin(PullkinBase):
             if version < self.MCS_VERSION and version != 38:
                 raise RuntimeError("protocol version {} unsupported".format(version))
         else:
-            tag, = struct.unpack("B", await self.__aioread(reader, 1))
+            (tag,) = struct.unpack("B", await self.__aioread(reader, 1))
         self.__log.debug("tag {} ({})".format(tag, self.PACKET_BY_TAG[tag]))
         size = await self.__aioread_varint32(reader)
         self.__log.debug("size {}".format(size))
@@ -76,10 +76,21 @@ class AioPullkin(PullkinBase):
             return payload
         return None
 
-    async def __aiolisten(self, reader, writer, credentials, callback, persistent_ids, obj, timer=0, is_alive=True):
+    async def __aiolisten(
+        self,
+        reader,
+        writer,
+        credentials,
+        callback,
+        persistent_ids,
+        obj,
+        timer=0,
+        is_alive=True,
+    ):
         import http_ece
         import cryptography.hazmat.primitives.serialization as serialization
         from cryptography.hazmat.backends import default_backend
+
         load_der_private_key = serialization.load_der_private_key
 
         self.gcm_check_in(**credentials["gcm"])
@@ -114,10 +125,12 @@ class AioPullkin(PullkinBase):
                 der_data, password=None, backend=default_backend()
             )
             decrypted = http_ece.decrypt(
-                p.raw_data, salt=salt,
-                private_key=privkey, dh=crypto_key,
+                p.raw_data,
+                salt=salt,
+                private_key=privkey,
+                dh=crypto_key,
                 version="aesgcm",
-                auth_secret=secret
+                auth_secret=secret,
             )
             if inspect.iscoroutinefunction(callback):
                 await callback(obj, json.loads(decrypted.decode("utf-8")), p)
@@ -126,7 +139,15 @@ class AioPullkin(PullkinBase):
             if timer:
                 await asyncio.sleep(timer)
 
-    async def aiolisten(self, credentials, callback, received_persistent_ids=None, obj=None, timer=0, is_alive=True):
+    async def aiolisten(
+        self,
+        credentials,
+        callback,
+        received_persistent_ids=None,
+        obj=None,
+        timer=0,
+        is_alive=True,
+    ):
         """
         listens for push notifications
 
@@ -139,10 +160,20 @@ class AioPullkin(PullkinBase):
         if received_persistent_ids is None:
             received_persistent_ids = []
         import ssl
+
         host = "mtalk.google.com"
         ssl_ctx = ssl.create_default_context()
         reader, writer = await asyncio.open_connection(host, 5228, ssl=ssl_ctx)
         self.__log.debug("connected to ssl socket")
-        await self.__aiolisten(reader, writer, credentials, callback, received_persistent_ids, obj, timer, is_alive)
+        await self.__aiolisten(
+            reader,
+            writer,
+            credentials,
+            callback,
+            received_persistent_ids,
+            obj,
+            timer,
+            is_alive,
+        )
         writer.close()
         await writer.wait_closed()

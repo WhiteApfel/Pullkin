@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 push_receiver_classifiers = [
     "Programming Language :: Python :: 3",
     "Intended Audience :: Developers",
-    "Topic :: Software Development :: Libraries"
+    "Topic :: Software Development :: Libraries",
 ]
 
 with open("README.md", "r") as f:
@@ -25,8 +25,5 @@ setup(
     classifiers=push_receiver_classifiers,
     keywords="fcm gcm push notification firebase google",
     install_requires=["oscrypto", "protobuf"],
-    extras_require={
-        "listen": ["http-ece"],
-        "example": ["appdirs"]
-    }
+    extras_require={"listen": ["http-ece"], "example": ["appdirs"]},
 )

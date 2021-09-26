@@ -21,16 +21,16 @@ class PullkinBase:
     __log = logging.getLogger("pullkin")
 
     SERVER_KEY = (
-            b"\x04\x33\x94\xf7\xdf\xa1\xeb\xb1\xdc\x03\xa2\x5e\x15\x71\xdb\x48\xd3"
-            b"\x2e\xed\xed\xb2\x34\xdb\xb7\x47\x3a\x0c\x8f\xc4\xcc\xe1\x6f\x3c"
-            b"\x8c\x84\xdf\xab\xb6\x66\x3e\xf2\x0c\xd4\x8b\xfe\xe3\xf9\x76\x2f"
-            b"\x14\x1c\x63\x08\x6a\x6f\x2d\xb1\x1a\x95\xb0\xce\x37\xc0\x9c\x6e"
+        b"\x04\x33\x94\xf7\xdf\xa1\xeb\xb1\xdc\x03\xa2\x5e\x15\x71\xdb\x48\xd3"
+        b"\x2e\xed\xed\xb2\x34\xdb\xb7\x47\x3a\x0c\x8f\xc4\xcc\xe1\x6f\x3c"
+        b"\x8c\x84\xdf\xab\xb6\x66\x3e\xf2\x0c\xd4\x8b\xfe\xe3\xf9\x76\x2f"
+        b"\x14\x1c\x63\x08\x6a\x6f\x2d\xb1\x1a\x95\xb0\xce\x37\xc0\x9c\x6e"
     )
 
     REGISTER_URL = "https://android.clients.google.com/c2dm/register3"
     CHECKIN_URL = "https://android.clients.google.com/checkin"
-    FCM_SUBSCRIBE = 'https://fcm.googleapis.com/fcm/connect/subscribe'
-    FCM_ENDPOINT = 'https://fcm.googleapis.com/fcm/send'
+    FCM_SUBSCRIBE = "https://fcm.googleapis.com/fcm/connect/subscribe"
+    FCM_ENDPOINT = "https://fcm.googleapis.com/fcm/send"
 
     MCS_VERSION = 41
 
@@ -50,7 +50,7 @@ class PullkinBase:
         "HttpResponse",
         "BindAccountRequest",
         "BindAccountResponse",
-        "TalkMetadata"
+        "TalkMetadata",
     ]
 
     @classmethod
@@ -99,7 +99,7 @@ class PullkinBase:
         req = Request(
             url=cls.CHECKIN_URL,
             headers={"Content-Type": "application/x-protobuf"},
-            data=payload.SerializeToString()
+            data=payload.SerializeToString(),
         )
         resp_data = cls.__do_request(req)
         resp = AndroidCheckinResponse()
@@ -136,7 +136,7 @@ class PullkinBase:
             "app": "org.chromium.linux",
             "X-subtype": appId,
             "device": chk["androidId"],
-            "sender": cls.urlsafe_base64(cls.SERVER_KEY)
+            "sender": cls.urlsafe_base64(cls.SERVER_KEY),
         }
         data = urlencode(body)
         cls.__log.debug(data)
@@ -144,7 +144,7 @@ class PullkinBase:
         req = Request(
             url=cls.REGISTER_URL,
             headers={"Authorization": auth},
-            data=data.encode("utf-8")
+            data=data.encode("utf-8"),
         )
         for _ in range(retries):
             resp_data = cls.__do_request(req, retries)
@@ -175,6 +175,7 @@ class PullkinBase:
         # maybe it's always zero
         public, private = generate_pair("ec", curve=cls.unicode("secp256r1"))
         from base64 import b64encode
+
         cls.__log.debug("# public")
         cls.__log.debug(b64encode(public.asn1.dump()))
         cls.__log.debug("# private")
@@ -182,14 +183,16 @@ class PullkinBase:
         keys = {
             "public": cls.urlsafe_base64(public.asn1.dump()[26:]),
             "private": cls.urlsafe_base64(private.asn1.dump()),
-            "secret": cls.urlsafe_base64(os.urandom(16))
+            "secret": cls.urlsafe_base64(os.urandom(16)),
         }
-        data = urlencode({
-            "authorized_entity": sender_id,
-            "endpoint": "{}/{}".format(cls.FCM_ENDPOINT, token),
-            "encryption_key": keys["public"],
-            "encryption_auth": keys["secret"]
-        })
+        data = urlencode(
+            {
+                "authorized_entity": sender_id,
+                "endpoint": "{}/{}".format(cls.FCM_ENDPOINT, token),
+                "encryption_key": keys["public"],
+                "encryption_auth": keys["secret"],
+            }
+        )
         cls.__log.debug(data)
         req = Request(url=cls.FCM_SUBSCRIBE, data=data.encode("utf-8"))
         resp_data = cls.__do_request(req, retries)
@@ -211,7 +214,7 @@ class PullkinBase:
     def __encode_varint32(cls, x):
         res = bytearray([])
         while x != 0:
-            b = (x & 0x7F)
+            b = x & 0x7F
             x >>= 7
             if x != 0:
                 b |= 0x80

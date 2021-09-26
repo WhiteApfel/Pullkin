@@ -33,16 +33,16 @@ unicode = str
 __log = logging.getLogger("pullkin")
 
 SERVER_KEY = (
-        b"\x04\x33\x94\xf7\xdf\xa1\xeb\xb1\xdc\x03\xa2\x5e\x15\x71\xdb\x48\xd3"
-        + b"\x2e\xed\xed\xb2\x34\xdb\xb7\x47\x3a\x0c\x8f\xc4\xcc\xe1\x6f\x3c"
-        + b"\x8c\x84\xdf\xab\xb6\x66\x3e\xf2\x0c\xd4\x8b\xfe\xe3\xf9\x76\x2f"
-        + b"\x14\x1c\x63\x08\x6a\x6f\x2d\xb1\x1a\x95\xb0\xce\x37\xc0\x9c\x6e"
+    b"\x04\x33\x94\xf7\xdf\xa1\xeb\xb1\xdc\x03\xa2\x5e\x15\x71\xdb\x48\xd3"
+    + b"\x2e\xed\xed\xb2\x34\xdb\xb7\x47\x3a\x0c\x8f\xc4\xcc\xe1\x6f\x3c"
+    + b"\x8c\x84\xdf\xab\xb6\x66\x3e\xf2\x0c\xd4\x8b\xfe\xe3\xf9\x76\x2f"
+    + b"\x14\x1c\x63\x08\x6a\x6f\x2d\xb1\x1a\x95\xb0\xce\x37\xc0\x9c\x6e"
 )
 
 REGISTER_URL = "https://android.clients.google.com/c2dm/register3"
 CHECKIN_URL = "https://android.clients.google.com/checkin"
-FCM_SUBSCRIBE = 'https://fcm.googleapis.com/fcm/connect/subscribe'
-FCM_ENDPOINT = 'https://fcm.googleapis.com/fcm/send'
+FCM_SUBSCRIBE = "https://fcm.googleapis.com/fcm/connect/subscribe"
+FCM_ENDPOINT = "https://fcm.googleapis.com/fcm/send"
 
 
 def __do_request(req, retries=5):
@@ -90,7 +90,7 @@ def gcm_check_in(androidId=None, securityToken=None, **kwargs):
     req = Request(
         url=CHECKIN_URL,
         headers={"Content-Type": "application/x-protobuf"},
-        data=payload.SerializeToString()
+        data=payload.SerializeToString(),
     )
     resp_data = __do_request(req)
     resp = AndroidCheckinResponse()
@@ -127,15 +127,13 @@ def gcm_register(appId, retries=5, **kwargs):
         "app": "org.chromium.linux",
         "X-subtype": appId,
         "device": chk["androidId"],
-        "sender": urlsafe_base64(SERVER_KEY)
+        "sender": urlsafe_base64(SERVER_KEY),
     }
     data = urlencode(body)
     __log.debug(data)
     auth = "AidLogin {}:{}".format(chk["androidId"], chk["securityToken"])
     req = Request(
-        url=REGISTER_URL,
-        headers={"Authorization": auth},
-        data=data.encode("utf-8")
+        url=REGISTER_URL, headers={"Authorization": auth}, data=data.encode("utf-8")
     )
     for _ in range(retries):
         resp_data = __do_request(req, retries)
@@ -166,6 +164,7 @@ def fcm_register(sender_id, token, retries=5):
     # maybe it's always zero
     public, private = generate_pair("ec", curve=unicode("secp256r1"))
     from base64 import b64encode
+
     __log.debug("# public")
     __log.debug(b64encode(public.asn1.dump()))
     __log.debug("# private")
@@ -173,14 +172,16 @@ def fcm_register(sender_id, token, retries=5):
     keys = {
         "public": urlsafe_base64(public.asn1.dump()[26:]),
         "private": urlsafe_base64(private.asn1.dump()),
-        "secret": urlsafe_base64(os.urandom(16))
+        "secret": urlsafe_base64(os.urandom(16)),
     }
-    data = urlencode({
-        "authorized_entity": sender_id,
-        "endpoint": "{}/{}".format(FCM_ENDPOINT, token),
-        "encryption_key": keys["public"],
-        "encryption_auth": keys["secret"]
-    })
+    data = urlencode(
+        {
+            "authorized_entity": sender_id,
+            "endpoint": "{}/{}".format(FCM_ENDPOINT, token),
+            "encryption_key": keys["public"],
+            "encryption_auth": keys["secret"],
+        }
+    )
     __log.debug(data)
     req = Request(url=FCM_SUBSCRIBE, data=data.encode("utf-8"))
     resp_data = __do_request(req, retries)
@@ -220,19 +221,19 @@ PACKET_BY_TAG = [
     "HttpResponse",
     "BindAccountRequest",
     "BindAccountResponse",
-    "TalkMetadata"
+    "TalkMetadata",
 ]
 
 
 def __read(s, size):
-    buf = b''
+    buf = b""
     while len(buf) < size:
         buf += s.recv(size - len(buf))
     return buf
 
 
 async def __aioread(reader: StreamReader, size):
-    buf = b''
+    buf = b""
     while len(buf) < size:
         buf += await reader.read(size - len(buf))
     return buf
@@ -247,7 +248,7 @@ def __read_varint32(s):
     res = 0
     shift = 0
     while True:
-        b, = struct.unpack("B", __read(s, 1))
+        (b,) = struct.unpack("B", __read(s, 1))
         res |= (b & 0x7F) << shift
         if (b & 0x80) == 0:
             break
@@ -259,7 +260,7 @@ async def __aioread_varint32(reader: StreamReader):
     res = 0
     shift = 0
     while True:
-        b, = struct.unpack("B", await __aioread(reader, 1))
+        (b,) = struct.unpack("B", await __aioread(reader, 1))
         res |= (b & 0x7F) << shift
         if (b & 0x80) == 0:
             break
@@ -270,7 +271,7 @@ async def __aioread_varint32(reader: StreamReader):
 def __encode_varint32(x):
     res = bytearray([])
     while x != 0:
-        b = (x & 0x7F)
+        b = x & 0x7F
         x >>= 7
         if x != 0:
             b |= 0x80
@@ -311,7 +312,7 @@ def __recv(s, first=False):
         if version < MCS_VERSION and version != 38:
             raise RuntimeError("protocol version {} unsupported".format(version))
     else:
-        tag, = struct.unpack("B", __read(s, 1))
+        (tag,) = struct.unpack("B", __read(s, 1))
     __log.debug("tag {} ({})".format(tag, PACKET_BY_TAG[tag]))
     size = __read_varint32(s)
     __log.debug("size {}".format(size))
@@ -333,7 +334,7 @@ async def __aiorecv(reader: StreamReader, first=False):
         if version < MCS_VERSION and version != 38:
             raise RuntimeError("protocol version {} unsupported".format(version))
     else:
-        tag, = struct.unpack("B", await __aioread(reader, 1))
+        (tag,) = struct.unpack("B", await __aioread(reader, 1))
     __log.debug("tag {} ({})".format(tag, PACKET_BY_TAG[tag]))
     size = await __aioread_varint32(reader)
     __log.debug("size {}".format(size))
@@ -361,6 +362,7 @@ def __listen(s, credentials, callback, persistent_ids, obj, timer=0, is_alive=Tr
     import http_ece
     import cryptography.hazmat.primitives.serialization as serialization
     from cryptography.hazmat.backends import default_backend
+
     load_der_private_key = serialization.load_der_private_key
 
     gcm_check_in(**credentials["gcm"])
@@ -395,10 +397,12 @@ def __listen(s, credentials, callback, persistent_ids, obj, timer=0, is_alive=Tr
             der_data, password=None, backend=default_backend()
         )
         decrypted = http_ece.decrypt(
-            p.raw_data, salt=salt,
-            private_key=privkey, dh=crypto_key,
+            p.raw_data,
+            salt=salt,
+            private_key=privkey,
+            dh=crypto_key,
             version="aesgcm",
-            auth_secret=secret
+            auth_secret=secret,
         )
         if inspect.iscoroutinefunction(callback):
             asyncio.run(callback(obj, json.loads(decrypted.decode("utf-8")), p))
@@ -408,10 +412,13 @@ def __listen(s, credentials, callback, persistent_ids, obj, timer=0, is_alive=Tr
             await asyncio.sleep(timer)
 
 
-async def __aiolisten(reader, writer, credentials, callback, persistent_ids, obj, timer=0, is_alive=True):
+async def __aiolisten(
+    reader, writer, credentials, callback, persistent_ids, obj, timer=0, is_alive=True
+):
     import http_ece
     import cryptography.hazmat.primitives.serialization as serialization
     from cryptography.hazmat.backends import default_backend
+
     load_der_private_key = serialization.load_der_private_key
 
     gcm_check_in(**credentials["gcm"])
@@ -446,10 +453,12 @@ async def __aiolisten(reader, writer, credentials, callback, persistent_ids, obj
             der_data, password=None, backend=default_backend()
         )
         decrypted = http_ece.decrypt(
-            p.raw_data, salt=salt,
-            private_key=privkey, dh=crypto_key,
+            p.raw_data,
+            salt=salt,
+            private_key=privkey,
+            dh=crypto_key,
             version="aesgcm",
-            auth_secret=secret
+            auth_secret=secret,
         )
         if inspect.iscoroutinefunction(callback):
             await callback(obj, json.loads(decrypted.decode("utf-8")), p)
@@ -459,7 +468,14 @@ async def __aiolisten(reader, writer, credentials, callback, persistent_ids, obj
             await asyncio.sleep(timer)
 
 
-def listen(credentials, callback, received_persistent_ids=None, obj=None, timer=0, is_alive=True):
+def listen(
+    credentials,
+    callback,
+    received_persistent_ids=None,
+    obj=None,
+    timer=0,
+    is_alive=True,
+):
     """
     listens for push notifications
 
@@ -473,6 +489,7 @@ def listen(credentials, callback, received_persistent_ids=None, obj=None, timer=
         received_persistent_ids = []
     import socket
     import ssl
+
     host = "mtalk.google.com"
     context = ssl.create_default_context()
     sock = socket.create_connection((host, 5228))
@@ -483,7 +500,14 @@ def listen(credentials, callback, received_persistent_ids=None, obj=None, timer=
     sock.close()
 
 
-async def aiolisten(credentials, callback, received_persistent_ids=None, obj=None, timer=0, is_alive=True):
+async def aiolisten(
+    credentials,
+    callback,
+    received_persistent_ids=None,
+    obj=None,
+    timer=0,
+    is_alive=True,
+):
     """
     listens for push notifications
 
@@ -497,13 +521,23 @@ async def aiolisten(credentials, callback, received_persistent_ids=None, obj=Non
         received_persistent_ids = []
     import socket
     import ssl
+
     host = "mtalk.google.com"
     context = ssl.create_default_context()
     sock = socket.create_connection((host, 5228))
     ssl_ctx = ssl.create_default_context()
     reader, writer = await asyncio.open_connection(host, 5228, ssl=ssl_ctx)
     __log.debug("connected to ssl socket")
-    await __aiolisten(reader, writer, credentials, callback, received_persistent_ids, obj, timer, is_alive)
+    await __aiolisten(
+        reader,
+        writer,
+        credentials,
+        callback,
+        received_persistent_ids,
+        obj,
+        timer,
+        is_alive,
+    )
     writer.close()
     await writer.wait_closed()
 
@@ -524,10 +558,7 @@ def run_example():
     logging.basicConfig(level=logging.CRITICAL + 1)
     args.log and logging.getLogger().setLevel(args.log)
 
-    data_path = appdirs.user_data_dir(
-        appname="push_receiver",
-        appauthor="lolisamurai"
-    )
+    data_path = appdirs.user_data_dir(appname="push_receiver", appauthor="lolisamurai")
     try:
         os.makedirs(data_path)
     except FileExistsError:
