@@ -409,7 +409,7 @@ def __listen(s, credentials, callback, persistent_ids, obj, timer=0, is_alive=Tr
         else:
             callback(obj, json.loads(decrypted.decode("utf-8")), p)
         if timer:
-            await asyncio.sleep(timer)
+            time.sleep(timer)
 
 
 async def __aiolisten(
