@@ -23,7 +23,7 @@ setup(
     long_description_content_type="text/markdown",
     license="Unlicense",
     classifiers=push_receiver_classifiers,
-    keywords="fcm gcm push notification firebase google",
+    keywords="fcm gcm push notification receive firebase google",
     install_requires=["oscrypto", "protobuf"],
     extras_require={"listen": ["http-ece"], "example": ["appdirs"]},
 )
