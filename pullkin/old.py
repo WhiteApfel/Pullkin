@@ -355,7 +355,7 @@ def __app_data_by_key(p, key, blow_shit_up=True):
     return None
 
 
-async def __listen(s, credentials, callback, persistent_ids, obj, timer=0, is_alive=True):
+def __listen(s, credentials, callback, persistent_ids, obj, timer=0, is_alive=True):
     import http_ece
     import cryptography.hazmat.primitives.serialization as serialization
     from cryptography.hazmat.backends import default_backend
@@ -399,7 +399,7 @@ async def __listen(s, credentials, callback, persistent_ids, obj, timer=0, is_al
             auth_secret=secret
         )
         if inspect.iscoroutinefunction(callback):
-            await callback(obj, json.loads(decrypted.decode("utf-8")), p)
+            asyncio.run(callback(obj, json.loads(decrypted.decode("utf-8")), p))
         else:
             callback(obj, json.loads(decrypted.decode("utf-8")), p)
         if timer:
@@ -457,7 +457,7 @@ async def __aiolisten(reader, writer, credentials, callback, persistent_ids, obj
             await asyncio.sleep(timer)
 
 
-async def listen(credentials, callback, received_persistent_ids=None, obj=None, timer=0, is_alive=True):
+def listen(credentials, callback, received_persistent_ids=None, obj=None, timer=0, is_alive=True):
     """
     listens for push notifications
 
@@ -476,7 +476,7 @@ async def listen(credentials, callback, received_persistent_ids=None, obj=None, 
     sock = socket.create_connection((host, 5228))
     s = context.wrap_socket(sock, server_hostname=host)
     __log.debug("connected to ssl socket")
-    await __listen(s, credentials, callback, received_persistent_ids, obj, timer, is_alive)
+    __listen(s, credentials, callback, received_persistent_ids, obj, timer, is_alive)
     s.close()
     sock.close()
 

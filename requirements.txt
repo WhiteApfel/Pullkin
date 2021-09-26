@@ -1,2 +1,4 @@
 oscrypto~=1.2.1
 setuptools~=57.4.0
+asyncio~=3.4.3
+protobuf~=3.17.3
