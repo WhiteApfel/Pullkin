@@ -8,7 +8,7 @@ push_receiver_classifiers = [
     "Topic :: Software Development :: Libraries"
 ]
 
-with open("README.rst", "r") as f:
+with open("README.md", "r") as f:
     push_receiver_readme = f.read()
 
 setup(
@@ -20,6 +20,7 @@ setup(
     packages=find_packages("."),
     description="Like Pushkin, but he subscribe to GCM/FCM and receive notifications",
     long_description=push_receiver_readme,
+    long_description_content_type="text/markdown",
     license="Unlicense",
     classifiers=push_receiver_classifiers,
     keywords="fcm gcm push notification firebase google",
