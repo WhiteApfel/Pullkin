@@ -13,7 +13,7 @@ with open("README.rst", "r") as f:
 
 setup(
     name="pullkin",
-    version="0.3.1a1",
+    version="0.3.1a2",
     author="Franc[e]sco & WhiteApfel",
     author_email="white@pfel.ru",
     url="https://github.com/WhiteApfel/Pullkin",
