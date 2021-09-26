@@ -1,28 +1,13 @@
 import asyncio
-import struct
-import asyncio
 import inspect
 import json
-import logging
-import os
 import struct
-import time
-import uuid
 from asyncio import StreamWriter, StreamReader
-from base64 import urlsafe_b64encode, urlsafe_b64decode
+from base64 import urlsafe_b64decode
 from binascii import hexlify
 
-from google.protobuf.json_format import MessageToDict
-from oscrypto.asymmetric import generate_pair
-
-from .android_checkin_pb2 import AndroidCheckinProto, ChromeBuildProto
-from .checkin_pb2 import AndroidCheckinRequest, AndroidCheckinResponse
-from .mcs_pb2 import *
-
-from urllib.request import Request, urlopen
-from urllib.parse import urlencode
-
 from pullkin.client_base import PullkinBase
+from .mcs_pb2 import *
 
 
 class AioPullkin(PullkinBase):
@@ -153,7 +138,6 @@ class AioPullkin(PullkinBase):
         """
         if received_persistent_ids is None:
             received_persistent_ids = []
-        import socket
         import ssl
         host = "mtalk.google.com"
         ssl_ctx = ssl.create_default_context()
