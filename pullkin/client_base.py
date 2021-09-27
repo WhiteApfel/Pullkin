@@ -18,7 +18,7 @@ from pullkin.proto.mcs_pb2 import *
 class PullkinBase:
     unicode = str
 
-    __log = logging.getLogger("pullkin")
+    _log = logging.getLogger("pullkin")
 
     SERVER_KEY = (
         b"\x04\x33\x94\xf7\xdf\xa1\xeb\xb1\xdc\x03\xa2\x5e\x15\x71\xdb\x48\xd3"
@@ -31,6 +31,9 @@ class PullkinBase:
     CHECKIN_URL = "https://android.clients.google.com/checkin"
     FCM_SUBSCRIBE = "https://fcm.googleapis.com/fcm/connect/subscribe"
     FCM_ENDPOINT = "https://fcm.googleapis.com/fcm/send"
+
+    PUSH_HOST = "mtalk.google.com"
+    PUSH_PORT = 5228
 
     MCS_VERSION = 41
 
@@ -54,16 +57,16 @@ class PullkinBase:
     ]
 
     @classmethod
-    def __do_request(cls, req, retries=5):
+    def _do_request(cls, req, retries=5):
         for _ in range(retries):
             try:
                 resp = urlopen(req)
                 resp_data = resp.read()
                 resp.close()
-                cls.__log.debug(resp_data)
+                cls._log.debug(resp_data)
                 return resp_data
             except Exception as e:
-                cls.__log.debug("error during request", exc_info=e)
+                cls._log.debug("error during request", exc_info=e)
                 time.sleep(1)
         return None
 
@@ -95,16 +98,16 @@ class PullkinBase:
         if securityToken:
             payload.security_token = int(securityToken)
 
-        cls.__log.debug(payload)
+        cls._log.debug(payload)
         req = Request(
             url=cls.CHECKIN_URL,
             headers={"Content-Type": "application/x-protobuf"},
             data=payload.SerializeToString(),
         )
-        resp_data = cls.__do_request(req)
+        resp_data = cls._do_request(req)
         resp = AndroidCheckinResponse()
         resp.ParseFromString(resp_data)
-        cls.__log.debug(resp)
+        cls._log.debug(resp)
         return MessageToDict(resp)
 
     @classmethod
@@ -131,7 +134,7 @@ class PullkinBase:
         """
         # contains androidId, securityToken and more
         chk = cls.gcm_check_in()
-        cls.__log.debug(chk)
+        cls._log.debug(chk)
         body = {
             "app": "org.chromium.linux",
             "X-subtype": appId,
@@ -139,7 +142,7 @@ class PullkinBase:
             "sender": cls.urlsafe_base64(cls.SERVER_KEY),
         }
         data = urlencode(body)
-        cls.__log.debug(data)
+        cls._log.debug(data)
         auth = "AidLogin {}:{}".format(chk["androidId"], chk["securityToken"])
         req = Request(
             url=cls.REGISTER_URL,
@@ -147,10 +150,10 @@ class PullkinBase:
             data=data.encode("utf-8"),
         )
         for _ in range(retries):
-            resp_data = cls.__do_request(req, retries)
+            resp_data = cls._do_request(req, retries)
             if b"Error" in resp_data:
                 err = resp_data.decode("utf-8")
-                cls.__log.error("Register request has failed with " + err)
+                cls._log.error("Register request has failed with " + err)
                 continue
             token = resp_data.decode("utf-8").split("=")[1]
             chkfields = {k: chk[k] for k in ["androidId", "securityToken"]}
@@ -176,10 +179,10 @@ class PullkinBase:
         public, private = generate_pair("ec", curve=cls.unicode("secp256r1"))
         from base64 import b64encode
 
-        cls.__log.debug("# public")
-        cls.__log.debug(b64encode(public.asn1.dump()))
-        cls.__log.debug("# private")
-        cls.__log.debug(b64encode(private.asn1.dump()))
+        cls._log.debug("# public")
+        cls._log.debug(b64encode(public.asn1.dump()))
+        cls._log.debug("# private")
+        cls._log.debug(b64encode(private.asn1.dump()))
         keys = {
             "public": cls.urlsafe_base64(public.asn1.dump()[26:]),
             "private": cls.urlsafe_base64(private.asn1.dump()),
@@ -193,25 +196,25 @@ class PullkinBase:
                 "encryption_auth": keys["secret"],
             }
         )
-        cls.__log.debug(data)
+        cls._log.debug(data)
         req = Request(url=cls.FCM_SUBSCRIBE, data=data.encode("utf-8"))
-        resp_data = cls.__do_request(req, retries)
+        resp_data = cls._do_request(req, retries)
         return {"keys": keys, "fcm": json.loads(resp_data.decode("utf-8"))}
 
     @classmethod
     def register(cls, sender_id):
         """register gcm and fcm tokens for sender_id"""
-        app_id = "wp:receiver.push.com#{}".format(uuid.uuid4())
+        app_id = "1:302251869498:android:90c5cd74bae68792813c03"
         subscription = cls.gcm_register(appId=app_id)
-        cls.__log.debug(subscription)
+        cls._log.debug(subscription)
         fcm = cls.fcm_register(sender_id=sender_id, token=subscription["token"])
-        cls.__log.debug(fcm)
+        cls._log.debug(fcm)
         res = {"gcm": subscription}
         res.update(fcm)
         return res
 
     @classmethod
-    def __encode_varint32(cls, x):
+    def _encode_varint32(cls, x):
         res = bytearray([])
         while x != 0:
             b = x & 0x7F
@@ -222,7 +225,7 @@ class PullkinBase:
         return bytes(res)
 
     @classmethod
-    def __app_data_by_key(cls, p, key, blow_shit_up=True):
+    def _app_data_by_key(cls, p, key, blow_shit_up=True):
         for x in p.app_data:
             if x.key == key:
                 return x.value

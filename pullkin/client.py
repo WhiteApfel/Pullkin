@@ -33,10 +33,10 @@ class Pullkin(PullkinBase):
 
     def __send(self, s, packet):
         header = bytearray([self.MCS_VERSION, self.PACKET_BY_TAG.index(type(packet))])
-        self.__log.debug(packet)
+        self._log.debug(packet)
         payload = packet.SerializeToString()
-        buf = bytes(header) + self.__encode_varint32(len(payload)) + payload
-        self.__log.debug(hexlify(buf))
+        buf = bytes(header) + self._encode_varint32(len(payload)) + payload
+        self._log.debug(hexlify(buf))
         n = len(buf)
         total = 0
         while total < n:
@@ -48,21 +48,21 @@ class Pullkin(PullkinBase):
     def __recv(self, s, first=False):
         if first:
             version, tag = struct.unpack("BB", self.__read(s, 2))
-            self.__log.debug("version {}".format(version))
+            self._log.debug("version {}".format(version))
             if version < self.MCS_VERSION and version != 38:
                 raise RuntimeError("protocol version {} unsupported".format(version))
         else:
             (tag,) = struct.unpack("B", self.__read(s, 1))
-        self.__log.debug("tag {} ({})".format(tag, self.PACKET_BY_TAG[tag]))
+        self._log.debug("tag {} ({})".format(tag, self.PACKET_BY_TAG[tag]))
         size = self.__read_varint32(s)
-        self.__log.debug("size {}".format(size))
+        self._log.debug("size {}".format(size))
         if size >= 0:
             buf = self.__read(s, size)
-            self.__log.debug(hexlify(buf))
+            self._log.debug(hexlify(buf))
             Packet = self.PACKET_BY_TAG[tag]
             payload = Packet()
             payload.ParseFromString(buf)
-            self.__log.debug(payload)
+            self._log.debug(payload)
             return payload
         return None
 
@@ -95,8 +95,8 @@ class Pullkin(PullkinBase):
             p = self.__recv(s)
             if type(p) is not DataMessageStanza:
                 continue
-            crypto_key = self.__app_data_by_key(p, "crypto-key")[3:]  # strip dh=
-            salt = self.__app_data_by_key(p, "encryption")[5:]  # strip salt=
+            crypto_key = self._app_data_by_key(p, "crypto-key")[3:]  # strip dh=
+            salt = self._app_data_by_key(p, "encryption")[5:]  # strip salt=
             crypto_key = urlsafe_b64decode(crypto_key.encode("ascii"))
             salt = urlsafe_b64decode(salt.encode("ascii"))
             der_data = credentials["keys"]["private"]
@@ -146,9 +146,9 @@ class Pullkin(PullkinBase):
 
         host = "mtalk.google.com"
         ssl_ctx = ssl.create_default_context()
-        sock = socket.create_connection((host, 5228))
+        sock = socket.create_connection((self.PUSH_HOST, self.PUSH_PORT))
         s = ssl_ctx.wrap_socket(sock, server_hostname=host)
-        self.__log.debug("connected to ssl socket")
+        self._log.debug("connected to ssl socket")
         self.__listen(
             s, credentials, callback, received_persistent_ids, obj, timer, is_alive
         )
