@@ -17,6 +17,12 @@ push_receiver_classifiers = [
 with open("README.md", "r") as f:
     push_receiver_readme = f.read()
 
+
+def requirements():
+    with open('requirements.txt', 'r') as req:
+        return [r for r in req.read().split("\n") if r]
+
+
 setup(
     name="pullkin",
     version="0.3.1a6",
@@ -30,6 +36,6 @@ setup(
     license="Mozilla Public License 2.0",
     classifiers=push_receiver_classifiers,
     keywords="fcm gcm push notification receive firebase google",
-    install_requires=["oscrypto", "protobuf"],
+    install_requires=requirements(),
     extras_require={"listen": ["http-ece"], "example": ["appdirs"]},
 )
