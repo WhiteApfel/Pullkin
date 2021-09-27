@@ -10,9 +10,9 @@ from urllib.request import Request, urlopen
 from google.protobuf.json_format import MessageToDict
 from oscrypto.asymmetric import generate_pair
 
-from pullkin.proto.android_checkin_pb2 import AndroidCheckinProto, ChromeBuildProto
-from pullkin.proto.checkin_pb2 import AndroidCheckinRequest, AndroidCheckinResponse
-from pullkin.proto.mcs_pb2 import *
+from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuildProto
+from pullkin.proto.checkin_proto import AndroidCheckinRequest, AndroidCheckinResponse
+from pullkin.proto.mcs_proto import *
 
 logger.disable("pullkin")
 
@@ -87,11 +87,11 @@ class PullkinBase:
 
         checkin = AndroidCheckinProto()
         checkin.type = 3
-        checkin.chrome_build.CopyFrom(chrome)
+        checkin.chrome_build.from_dict(chrome.to_dict())
 
         payload = AndroidCheckinRequest()
         payload.user_serial_number = 0
-        payload.checkin.CopyFrom(checkin)
+        payload.checkin.from_dict(checkin.to_dict())
         payload.version = 3
         if androidId:
             payload.id = int(androidId)
@@ -106,9 +106,9 @@ class PullkinBase:
         )
         resp_data = cls._do_request(req)
         resp = AndroidCheckinResponse()
-        resp.ParseFromString(resp_data)
+        resp.FromString(resp_data)
         logger.debug(f"Response:\n{resp}")
-        return MessageToDict(resp)
+        return resp.to_dict()
 
     @classmethod
     def urlsafe_base64(cls, data):

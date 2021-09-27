@@ -5,7 +5,7 @@ import struct
 from asyncio import StreamWriter, StreamReader
 from base64 import urlsafe_b64decode
 from binascii import hexlify
-from typing import Optional, Callable, Union
+from typing import Optional, Callable, Union, Coroutine
 
 import cryptography.hazmat.primitives.serialization as serialization
 import http_ece
@@ -13,7 +13,7 @@ from cryptography.hazmat.backends import default_backend
 from loguru import logger
 
 from pullkin.client_base import PullkinBase
-from pullkin.proto.mcs_pb2 import *
+from pullkin.proto.mcs_proto import *
 
 logger.disable("pullkin")
 
@@ -79,7 +79,7 @@ class AioPullkin(PullkinBase):
             logger.debug(f"HEX buffer:\n`{hexlify(buf)}`")
             Packet = self.PACKET_BY_TAG[tag]
             payload = Packet()
-            payload.ParseFromString(buf)
+            payload.parse(buf)
             logger.debug(f"Payload:\n`{payload}`")
             return payload
         return None
@@ -95,8 +95,13 @@ class AioPullkin(PullkinBase):
             return
         if self._is_deleted_message(p):
             return
-        crypto_key = self._app_data_by_key(p, "crypto-key")[3:]  # strip dh=
-        salt = self._app_data_by_key(p, "encryption")[5:]  # strip salt=
+        crypto_key = self._app_data_by_key(p, "crypto-key", False)
+        salt = self._app_data_by_key(p, "encryption", False)
+        logger.debug(f"crypto-key: {crypto_key}, salt: {salt}")
+        if not (salt and crypto_key):
+            return
+        crypto_key = crypto_key[3:]  # strip dh=
+        salt = salt[5:]  # strip salt=
         crypto_key = urlsafe_b64decode(crypto_key.encode("ascii"))
         salt = urlsafe_b64decode(salt.encode("ascii"))
         der_data = self.credentials["keys"]["private"]
@@ -132,7 +137,7 @@ class AioPullkin(PullkinBase):
         req.resource = self.credentials["gcm"]["androidId"]
         req.user = self.credentials["gcm"]["androidId"]
         req.use_rmq2 = True
-        req.setting.add(name="new_vc", value="1")
+        req.setting.append(Setting(name="new_vc", value="1"))
         req.received_persistent_id.extend(self.persistent_ids)
         await self.__aiosend(req)
         login_response = await self.__aiorecv(first=True)
@@ -145,7 +150,13 @@ class AioPullkin(PullkinBase):
         while True:
             yield await self.__aiolisthen_once(load_der_private_key)
 
-    async def listen_forever(self, timer: Union[int, float] = 1):
+    async def listen_coroutine(self) -> Coroutine:
+        if not (self.__reader or self.__writer):
+            await self.__open_connection()
+        coroutine = self.__aiolisten_coroutine()
+        return coroutine
+
+    async def listen_forever(self, timer: Union[int, float] = 1) -> None:
         """
         listens for push notifications
 
