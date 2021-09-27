@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
   print("send notifications to {}".format(credentials["fcm"]["token"]))
 
-  with open("persistent_ids.txt", "a+") as f:
+  with open("persistent_ids.txt", "r+") as f:
     received_persistent_ids = [x.strip() for x in f]
 
   listen(credentials, on_notification, received_persistent_ids)
