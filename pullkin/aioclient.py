@@ -5,7 +5,11 @@ import struct
 from asyncio import StreamWriter, StreamReader
 from base64 import urlsafe_b64decode
 from binascii import hexlify
-from typing import Optional
+from typing import Optional, Callable, Union
+
+import cryptography.hazmat.primitives.serialization as serialization
+import http_ece
+from cryptography.hazmat.backends import default_backend
 
 from pullkin.client_base import PullkinBase
 from pullkin.proto.mcs_pb2 import *
@@ -13,18 +17,24 @@ from pullkin.proto.mcs_pb2 import *
 
 class AioPullkin(PullkinBase):
     def __init__(self):
-        self.reader: Optional[StreamReader] = None
-        self.writer: Optional[StreamWriter] = None
+        self.__reader: Optional[StreamReader] = None
+        self.__writer: Optional[StreamWriter] = None
+        self.credentials: dict = {}
+        self.persistent_ids: list = []
+        self.callback: Callable = None
 
     async def __open_connection(self):
         import ssl
+
         ssl_ctx = ssl.create_default_context()
-        self.reader, self.writer = await asyncio.open_connection(self.PUSH_HOST, self.PUSH_PORT, ssl=ssl_ctx)
+        self.__reader, self.__writer = await asyncio.open_connection(
+            self.PUSH_HOST, self.PUSH_PORT, ssl=ssl_ctx
+        )
 
     async def __aioread(self, size):
         buf = b""
         while len(buf) < size:
-            buf += await self.reader.read(size - len(buf))
+            buf += await self.__reader.read(size - len(buf))
         return buf
 
     async def __aioread_varint32(self):
@@ -45,8 +55,8 @@ class AioPullkin(PullkinBase):
         buf = bytes(header) + self._encode_varint32(len(payload)) + payload
         self._log.debug(hexlify(buf))
         n = len(buf)
-        self.writer.write(buf)
-        await self.writer.drain()
+        self.__writer.write(buf)
+        await self.__writer.drain()
 
     async def __aiorecv(self, first=False):
         if first:
@@ -71,24 +81,22 @@ class AioPullkin(PullkinBase):
 
     async def __aiolisthen_once(
         self,
-        credentials,
-        callback,
-        persistent_ids,
         obj,
-        load_der_private_key=None,
     ):
-        import http_ece
-        from cryptography.hazmat.backends import default_backend
+        load_der_private_key = serialization.load_der_private_key
+
         p = await self.__aiorecv()
         if type(p) is not DataMessageStanza:
+            return
+        if self._is_deleted_message(p):
             return
         crypto_key = self._app_data_by_key(p, "crypto-key")[3:]  # strip dh=
         salt = self._app_data_by_key(p, "encryption")[5:]  # strip salt=
         crypto_key = urlsafe_b64decode(crypto_key.encode("ascii"))
         salt = urlsafe_b64decode(salt.encode("ascii"))
-        der_data = credentials["keys"]["private"]
+        der_data = self.credentials["keys"]["private"]
         der_data = urlsafe_b64decode(der_data.encode("ascii") + b"========")
-        secret = credentials["keys"]["secret"]
+        secret = self.credentials["keys"]["secret"]
         secret = urlsafe_b64decode(secret.encode("ascii") + b"========")
         privkey = load_der_private_key(
             der_data, password=None, backend=default_backend()
@@ -101,61 +109,44 @@ class AioPullkin(PullkinBase):
             version="aesgcm",
             auth_secret=secret,
         )
-        if inspect.iscoroutinefunction(callback):
-            await callback(obj, json.loads(decrypted.decode("utf-8")), p)
+        if inspect.iscoroutinefunction(self.callback):
+            await self.callback(obj, json.loads(decrypted.decode("utf-8")), p)
         else:
-            callback(obj, json.loads(decrypted.decode("utf-8")), p)
+            self.callback(obj, json.loads(decrypted.decode("utf-8")), p)
 
-    async def __aiolisten(
-        self,
-        credentials,
-        callback,
-        persistent_ids,
-        obj,
-        timer=0,
-        is_alive=True,
-    ):
-        import http_ece
-        import cryptography.hazmat.primitives.serialization as serialization
-        from cryptography.hazmat.backends import default_backend
-
-        load_der_private_key = serialization.load_der_private_key
-
-        self.gcm_check_in(**credentials["gcm"])
+    async def __aiolisten_start(self):
+        self.gcm_check_in(**self.credentials["gcm"])
         req = LoginRequest()
         req.adaptive_heartbeat = False
         req.auth_service = 2
-        req.auth_token = credentials["gcm"]["securityToken"]
+        req.auth_token = self.credentials["gcm"]["securityToken"]
         req.id = "chrome-91.0.3234.0"
         req.domain = "mcs.android.com"
-        req.device_id = "android-%x" % int(credentials["gcm"]["androidId"])
+        req.device_id = "android-%x" % int(self.credentials["gcm"]["androidId"])
         req.network_type = 1
-        req.resource = credentials["gcm"]["androidId"]
-        req.user = credentials["gcm"]["androidId"]
+        req.resource = self.credentials["gcm"]["androidId"]
+        req.user = self.credentials["gcm"]["androidId"]
         req.use_rmq2 = True
         req.setting.add(name="new_vc", value="1")
-        req.received_persistent_id.extend(persistent_ids)
+        req.received_persistent_id.extend(self.persistent_ids)
         await self.__aiosend(req)
         login_response = await self.__aiorecv(first=True)
-        while is_alive:
-            await self.__aiolisthen_once(
-                credentials,
-                callback,
-                persistent_ids,
-                obj,
-                load_der_private_key
-            )
-            if timer:
-                await asyncio.sleep(timer)
 
-    async def aiolisten(
+    async def __aiolisten_coroutine(self):
+        import cryptography.hazmat.primitives.serialization as serialization
+
+        load_der_private_key = serialization.load_der_private_key
+
+        while True:
+            print(" >>> Читаем данные")
+            yield await self.__aiolisthen_once(load_der_private_key)
+
+    async def listen_forever(
         self,
-        credentials,
-        callback,
-        received_persistent_ids=None,
-        obj=None,
-        timer=0,
-        is_alive=True,
+        credentials: dict = None,
+        callback: Callable = None,
+        received_persistent_ids: Union[list, tuple, set] = None,
+        timer: Union[int, float] = 1
     ):
         """
         listens for push notifications
@@ -166,18 +157,26 @@ class AioPullkin(PullkinBase):
                                  array of strings
         obj: optional arbitrary value passed to callback
         """
-        if received_persistent_ids is None:
-            received_persistent_ids = []
+        if received_persistent_ids:
+            self.persistent_ids = list(received_persistent_ids)
 
-        await self.__open_connection()
+        if callback:
+            self.callback = callback
+
+        if credentials:
+            self.credentials = credentials
+
+        if not (self.__reader or self.__writer):
+            await self.__open_connection()
+
         self._log.debug("connected to ssl socket")
-        await self.__aiolisten(
-            credentials,
-            callback,
-            received_persistent_ids,
-            obj,
-            timer,
-            is_alive,
-        )
-        self.writer.close()
-        await self.writer.wait_closed()
+
+        await self.__aiolisten_start()
+        coroutine = self.__aiolisten_coroutine()
+        try:
+            while True:
+                await coroutine.asend(None)
+                await asyncio.sleep(timer)
+        except Exception as e:
+            self.__writer.close()
+            await self.__writer.wait_closed()

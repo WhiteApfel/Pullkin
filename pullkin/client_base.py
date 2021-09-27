@@ -232,3 +232,10 @@ class PullkinBase:
         if blow_shit_up:
             raise RuntimeError("couldn't find in app_data {}".format(key))
         return None
+
+    @classmethod
+    def _is_deleted_message(cls, p):
+        for x in p.app_data:
+            if x.key == 'message_type' and x.value == 'deleted_messages':
+                return True
+        return False
