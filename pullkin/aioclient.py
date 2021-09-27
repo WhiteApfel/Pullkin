@@ -7,7 +7,7 @@ from base64 import urlsafe_b64decode
 from binascii import hexlify
 
 from pullkin.client_base import PullkinBase
-from .mcs_pb2 import *
+from pullkin.proto.mcs_pb2 import *
 
 
 class AioPullkin(PullkinBase):

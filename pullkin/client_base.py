@@ -10,9 +10,9 @@ from urllib.request import Request, urlopen
 from google.protobuf.json_format import MessageToDict
 from oscrypto.asymmetric import generate_pair
 
-from .android_checkin_pb2 import AndroidCheckinProto, ChromeBuildProto
-from .checkin_pb2 import AndroidCheckinRequest, AndroidCheckinResponse
-from .mcs_pb2 import *
+from pullkin.proto.android_checkin_pb2 import AndroidCheckinProto, ChromeBuildProto
+from pullkin.proto.checkin_pb2 import AndroidCheckinRequest, AndroidCheckinResponse
+from pullkin.proto.mcs_pb2 import *
 
 
 class PullkinBase:

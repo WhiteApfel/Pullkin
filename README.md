@@ -14,7 +14,7 @@ just wrapped the code already written by Franc[e]sco in a design convenient for 
 Note that for the listening part Franc[e]sco has to pull in http-ece which depends
 on a full blown native crypto library rather than just oscrypto. it is
 an optional dependency so you'll have to install it explicitly by depending
-on pullkin[listen]
+on `pullkin[listen]`
 
 ## Usage
 
@@ -22,18 +22,21 @@ on pullkin[listen]
 pip install pullkin
 ```
 
-basic usage example that stores and loads credentials and persistent ids
+Basic usage example that stores and loads credentials and persistent ids
 and prints new notifications
 
-you can also run this example with this command (change the sender id)
-
+You can also run this example with this command (change the sender id)
 
 ```shell
 python -m pullkin --sender-id=722915550290
 ```
 
+### Compatibility with Franc[e]sco version
+
+You should import familiar functions from `pullkin.old` instead of `push_receiver`
+
 ```python
-from pullkin import register, listen
+from pullkin.old import register, listen
 import json
 
 
