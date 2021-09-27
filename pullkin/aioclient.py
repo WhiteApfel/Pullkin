@@ -10,9 +10,12 @@ from typing import Optional, Callable, Union
 import cryptography.hazmat.primitives.serialization as serialization
 import http_ece
 from cryptography.hazmat.backends import default_backend
+from loguru import logger
 
 from pullkin.client_base import PullkinBase
 from pullkin.proto.mcs_pb2 import *
+
+logger.disable("pullkin")
 
 
 class AioPullkin(PullkinBase):
@@ -30,6 +33,7 @@ class AioPullkin(PullkinBase):
         self.__reader, self.__writer = await asyncio.open_connection(
             self.PUSH_HOST, self.PUSH_PORT, ssl=ssl_ctx
         )
+        logger.debug("connected to ssl socket")
 
     async def __aioread(self, size):
         buf = b""
@@ -50,10 +54,10 @@ class AioPullkin(PullkinBase):
 
     async def __aiosend(self, packet):
         header = bytearray([self.MCS_VERSION, self.PACKET_BY_TAG.index(type(packet))])
-        self._log.debug(packet)
+        logger.debug(packet)
         payload = packet.SerializeToString()
         buf = bytes(header) + self._encode_varint32(len(payload)) + payload
-        self._log.debug(hexlify(buf))
+        logger.debug(hexlify(buf))
         n = len(buf)
         self.__writer.write(buf)
         await self.__writer.drain()
@@ -61,21 +65,21 @@ class AioPullkin(PullkinBase):
     async def __aiorecv(self, first=False):
         if first:
             version, tag = struct.unpack("BB", await self.__aioread(2))
-            self._log.debug("version {}".format(version))
+            logger.debug("version {}".format(version))
             if version < self.MCS_VERSION and version != 38:
                 raise RuntimeError("protocol version {} unsupported".format(version))
         else:
             (tag,) = struct.unpack("B", await self.__aioread(1))
-        self._log.debug("tag {} ({})".format(tag, self.PACKET_BY_TAG[tag]))
+        logger.debug("tag {} ({})".format(tag, self.PACKET_BY_TAG[tag]))
         size = await self.__aioread_varint32()
-        self._log.debug("size {}".format(size))
+        logger.debug("size {}".format(size))
         if size >= 0:
             buf = await self.__aioread(size)
-            self._log.debug(hexlify(buf))
+            logger.debug(hexlify(buf))
             Packet = self.PACKET_BY_TAG[tag]
             payload = Packet()
             payload.ParseFromString(buf)
-            self._log.debug(payload)
+            logger.debug(payload)
             return payload
         return None
 
@@ -138,16 +142,9 @@ class AioPullkin(PullkinBase):
         load_der_private_key = serialization.load_der_private_key
 
         while True:
-            print(" >>> Читаем данные")
             yield await self.__aiolisthen_once(load_der_private_key)
 
-    async def listen_forever(
-        self,
-        credentials: dict = None,
-        callback: Callable = None,
-        received_persistent_ids: Union[list, tuple, set] = None,
-        timer: Union[int, float] = 1
-    ):
+    async def listen_forever(self, timer: Union[int, float] = 1):
         """
         listens for push notifications
 
@@ -157,19 +154,8 @@ class AioPullkin(PullkinBase):
                                  array of strings
         obj: optional arbitrary value passed to callback
         """
-        if received_persistent_ids:
-            self.persistent_ids = list(received_persistent_ids)
-
-        if callback:
-            self.callback = callback
-
-        if credentials:
-            self.credentials = credentials
-
         if not (self.__reader or self.__writer):
             await self.__open_connection()
-
-        self._log.debug("connected to ssl socket")
 
         await self.__aiolisten_start()
         coroutine = self.__aiolisten_coroutine()

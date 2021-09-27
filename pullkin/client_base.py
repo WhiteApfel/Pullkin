@@ -1,5 +1,5 @@
 import json
-import logging
+from loguru import logger
 import os
 import time
 import uuid
@@ -14,11 +14,11 @@ from pullkin.proto.android_checkin_pb2 import AndroidCheckinProto, ChromeBuildPr
 from pullkin.proto.checkin_pb2 import AndroidCheckinRequest, AndroidCheckinResponse
 from pullkin.proto.mcs_pb2 import *
 
+logger.disable("pullkin")
+
 
 class PullkinBase:
     unicode = str
-
-    _log = logging.getLogger("pullkin")
 
     SERVER_KEY = (
         b"\x04\x33\x94\xf7\xdf\xa1\xeb\xb1\xdc\x03\xa2\x5e\x15\x71\xdb\x48\xd3"
@@ -63,10 +63,10 @@ class PullkinBase:
                 resp = urlopen(req)
                 resp_data = resp.read()
                 resp.close()
-                cls._log.debug(resp_data)
+                logger.debug(resp_data)
                 return resp_data
             except Exception as e:
-                cls._log.debug("error during request", exc_info=e)
+                logger.debug("error during request", exc_info=e)
                 time.sleep(1)
         return None
 
@@ -98,7 +98,7 @@ class PullkinBase:
         if securityToken:
             payload.security_token = int(securityToken)
 
-        cls._log.debug(payload)
+        logger.debug(payload)
         req = Request(
             url=cls.CHECKIN_URL,
             headers={"Content-Type": "application/x-protobuf"},
@@ -107,7 +107,7 @@ class PullkinBase:
         resp_data = cls._do_request(req)
         resp = AndroidCheckinResponse()
         resp.ParseFromString(resp_data)
-        cls._log.debug(resp)
+        logger.debug(resp)
         return MessageToDict(resp)
 
     @classmethod
@@ -134,7 +134,7 @@ class PullkinBase:
         """
         # contains androidId, securityToken and more
         chk = cls.gcm_check_in()
-        cls._log.debug(chk)
+        logger.debug(chk)
         body = {
             "app": "org.chromium.linux",
             "X-subtype": appId,
@@ -142,7 +142,7 @@ class PullkinBase:
             "sender": cls.urlsafe_base64(cls.SERVER_KEY),
         }
         data = urlencode(body)
-        cls._log.debug(data)
+        logger.debug(data)
         auth = "AidLogin {}:{}".format(chk["androidId"], chk["securityToken"])
         req = Request(
             url=cls.REGISTER_URL,
@@ -153,7 +153,7 @@ class PullkinBase:
             resp_data = cls._do_request(req, retries)
             if b"Error" in resp_data:
                 err = resp_data.decode("utf-8")
-                cls._log.error("Register request has failed with " + err)
+                logger.error("Register request has failed with " + err)
                 continue
             token = resp_data.decode("utf-8").split("=")[1]
             chkfields = {k: chk[k] for k in ["androidId", "securityToken"]}
@@ -179,10 +179,10 @@ class PullkinBase:
         public, private = generate_pair("ec", curve=cls.unicode("secp256r1"))
         from base64 import b64encode
 
-        cls._log.debug("# public")
-        cls._log.debug(b64encode(public.asn1.dump()))
-        cls._log.debug("# private")
-        cls._log.debug(b64encode(private.asn1.dump()))
+        logger.debug("# public")
+        logger.debug(b64encode(public.asn1.dump()))
+        logger.debug("# private")
+        logger.debug(b64encode(private.asn1.dump()))
         keys = {
             "public": cls.urlsafe_base64(public.asn1.dump()[26:]),
             "private": cls.urlsafe_base64(private.asn1.dump()),
@@ -196,7 +196,7 @@ class PullkinBase:
                 "encryption_auth": keys["secret"],
             }
         )
-        cls._log.debug(data)
+        logger.debug(data)
         req = Request(url=cls.FCM_SUBSCRIBE, data=data.encode("utf-8"))
         resp_data = cls._do_request(req, retries)
         return {"keys": keys, "fcm": json.loads(resp_data.decode("utf-8"))}
@@ -206,9 +206,9 @@ class PullkinBase:
         """register gcm and fcm tokens for sender_id"""
         app_id = "1:302251869498:android:90c5cd74bae68792813c03"
         subscription = cls.gcm_register(appId=app_id)
-        cls._log.debug(subscription)
+        logger.debug(subscription)
         fcm = cls.fcm_register(sender_id=sender_id, token=subscription["token"])
-        cls._log.debug(fcm)
+        logger.debug(fcm)
         res = {"gcm": subscription}
         res.update(fcm)
         return res
@@ -236,6 +236,6 @@ class PullkinBase:
     @classmethod
     def _is_deleted_message(cls, p):
         for x in p.app_data:
-            if x.key == 'message_type' and x.value == 'deleted_messages':
+            if x.key == "message_type" and x.value == "deleted_messages":
                 return True
         return False

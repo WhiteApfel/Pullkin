@@ -6,8 +6,12 @@ import time
 from base64 import urlsafe_b64decode
 from binascii import hexlify
 
+from loguru import logger
+
 from pullkin.client_base import PullkinBase
 from pullkin.proto.mcs_pb2 import *
+
+logger.disable('pullkin')
 
 
 class Pullkin(PullkinBase):
@@ -33,10 +37,10 @@ class Pullkin(PullkinBase):
 
     def __send(self, s, packet):
         header = bytearray([self.MCS_VERSION, self.PACKET_BY_TAG.index(type(packet))])
-        self._log.debug(packet)
+        logger.debug(packet)
         payload = packet.SerializeToString()
         buf = bytes(header) + self._encode_varint32(len(payload)) + payload
-        self._log.debug(hexlify(buf))
+        logger.debug(hexlify(buf))
         n = len(buf)
         total = 0
         while total < n:
@@ -48,21 +52,21 @@ class Pullkin(PullkinBase):
     def __recv(self, s, first=False):
         if first:
             version, tag = struct.unpack("BB", self.__read(s, 2))
-            self._log.debug("version {}".format(version))
+            logger.debug("version {}".format(version))
             if version < self.MCS_VERSION and version != 38:
                 raise RuntimeError("protocol version {} unsupported".format(version))
         else:
             (tag,) = struct.unpack("B", self.__read(s, 1))
-        self._log.debug("tag {} ({})".format(tag, self.PACKET_BY_TAG[tag]))
+        logger.debug("tag {} ({})".format(tag, self.PACKET_BY_TAG[tag]))
         size = self.__read_varint32(s)
-        self._log.debug("size {}".format(size))
+        logger.debug("size {}".format(size))
         if size >= 0:
             buf = self.__read(s, size)
-            self._log.debug(hexlify(buf))
+            logger.debug(hexlify(buf))
             Packet = self.PACKET_BY_TAG[tag]
             payload = Packet()
             payload.ParseFromString(buf)
-            self._log.debug(payload)
+            logger.debug(payload)
             return payload
         return None
 
@@ -148,7 +152,7 @@ class Pullkin(PullkinBase):
         ssl_ctx = ssl.create_default_context()
         sock = socket.create_connection((self.PUSH_HOST, self.PUSH_PORT))
         s = ssl_ctx.wrap_socket(sock, server_hostname=host)
-        self._log.debug("connected to ssl socket")
+        logger.debug("connected to ssl socket")
         self.__listen(
             s, credentials, callback, received_persistent_ids, obj, timer, is_alive
         )
