@@ -4,7 +4,6 @@ from setuptools import setup, find_packages
 
 push_receiver_classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.5",
     "Programming Language :: Python :: 3.6",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
@@ -20,7 +19,7 @@ with open("README.md", "r") as f:
 
 setup(
     name="pullkin",
-    version="0.3.1a4",
+    version="0.3.1a5",
     author="Franc[e]sco & WhiteApfel",
     author_email="white@pfel.ru",
     url="https://github.com/WhiteApfel/pullkin",
