@@ -145,9 +145,9 @@ class Pullkin(PullkinBase):
         import ssl
 
         host = "mtalk.google.com"
-        context = ssl.create_default_context()
+        ssl_ctx = ssl.create_default_context()
         sock = socket.create_connection((host, 5228))
-        s = context.wrap_socket(sock, server_hostname=host)
+        s = ssl_ctx.wrap_socket(sock, server_hostname=host)
         self.__log.debug("connected to ssl socket")
         self.__listen(
             s, credentials, callback, received_persistent_ids, obj, timer, is_alive
