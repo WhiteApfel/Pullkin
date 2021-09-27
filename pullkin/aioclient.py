@@ -33,7 +33,7 @@ class AioPullkin(PullkinBase):
         self.__reader, self.__writer = await asyncio.open_connection(
             self.PUSH_HOST, self.PUSH_PORT, ssl=ssl_ctx
         )
-        logger.debug("connected to ssl socket")
+        logger.debug(f"Connected to SSL socket {self.PUSH_HOST}:{self.PUSH_PORT} with default ssl_context")
 
     async def __aioread(self, size):
         buf = b""
@@ -53,33 +53,34 @@ class AioPullkin(PullkinBase):
         return res
 
     async def __aiosend(self, packet):
+        logger.debug(f"Send")
         header = bytearray([self.MCS_VERSION, self.PACKET_BY_TAG.index(type(packet))])
-        logger.debug(packet)
+        logger.debug(f"Packet:\n'{packet}'")
         payload = packet.SerializeToString()
         buf = bytes(header) + self._encode_varint32(len(payload)) + payload
-        logger.debug(hexlify(buf))
-        n = len(buf)
+        logger.debug(f"HEX buffer:\n`{hexlify(buf)}`")
         self.__writer.write(buf)
         await self.__writer.drain()
 
     async def __aiorecv(self, first=False):
+        logger.debug(f"Receive")
         if first:
             version, tag = struct.unpack("BB", await self.__aioread(2))
-            logger.debug("version {}".format(version))
+            logger.debug(f"Version {version}")
             if version < self.MCS_VERSION and version != 38:
-                raise RuntimeError("protocol version {} unsupported".format(version))
+                raise RuntimeError(f"Protocol version {version} unsupported")
         else:
             (tag,) = struct.unpack("B", await self.__aioread(1))
-        logger.debug("tag {} ({})".format(tag, self.PACKET_BY_TAG[tag]))
+        logger.debug(f"Tag {tag} ({self.PACKET_BY_TAG[tag]})")
         size = await self.__aioread_varint32()
-        logger.debug("size {}".format(size))
+        logger.debug(f"Size {size}")
         if size >= 0:
             buf = await self.__aioread(size)
-            logger.debug(hexlify(buf))
+            logger.debug(f"HEX buffer:\n`{hexlify(buf)}`")
             Packet = self.PACKET_BY_TAG[tag]
             payload = Packet()
             payload.ParseFromString(buf)
-            logger.debug(payload)
+            logger.debug(f"Payload:\n`{payload}`")
             return payload
         return None
 

@@ -63,10 +63,10 @@ class PullkinBase:
                 resp = urlopen(req)
                 resp_data = resp.read()
                 resp.close()
-                logger.debug(resp_data)
+                logger.debug(f"Response:\n{resp_data}")
                 return resp_data
             except Exception as e:
-                logger.debug("error during request", exc_info=e)
+                logger.opt(exception=e).debug("Error during request:")
                 time.sleep(1)
         return None
 
@@ -98,7 +98,7 @@ class PullkinBase:
         if securityToken:
             payload.security_token = int(securityToken)
 
-        logger.debug(payload)
+        logger.debug(f"Payload:\n{payload}")
         req = Request(
             url=cls.CHECKIN_URL,
             headers={"Content-Type": "application/x-protobuf"},
@@ -107,7 +107,7 @@ class PullkinBase:
         resp_data = cls._do_request(req)
         resp = AndroidCheckinResponse()
         resp.ParseFromString(resp_data)
-        logger.debug(resp)
+        logger.debug(f"Response:\n{resp}")
         return MessageToDict(resp)
 
     @classmethod
@@ -134,7 +134,7 @@ class PullkinBase:
         """
         # contains androidId, securityToken and more
         chk = cls.gcm_check_in()
-        logger.debug(chk)
+        logger.debug(f"Check_in:\n{chk}")
         body = {
             "app": "org.chromium.linux",
             "X-subtype": appId,
@@ -142,7 +142,7 @@ class PullkinBase:
             "sender": cls.urlsafe_base64(cls.SERVER_KEY),
         }
         data = urlencode(body)
-        logger.debug(data)
+        logger.debug(f"Data:\n{data}")
         auth = "AidLogin {}:{}".format(chk["androidId"], chk["securityToken"])
         req = Request(
             url=cls.REGISTER_URL,
@@ -153,7 +153,7 @@ class PullkinBase:
             resp_data = cls._do_request(req, retries)
             if b"Error" in resp_data:
                 err = resp_data.decode("utf-8")
-                logger.error("Register request has failed with " + err)
+                logger.error(f"Register request has failed with {err}")
                 continue
             token = resp_data.decode("utf-8").split("=")[1]
             chkfields = {k: chk[k] for k in ["androidId", "securityToken"]}
@@ -179,9 +179,9 @@ class PullkinBase:
         public, private = generate_pair("ec", curve=cls.unicode("secp256r1"))
         from base64 import b64encode
 
-        logger.debug("# public")
+        logger.debug("# Public")
         logger.debug(b64encode(public.asn1.dump()))
-        logger.debug("# private")
+        logger.debug("# Private")
         logger.debug(b64encode(private.asn1.dump()))
         keys = {
             "public": cls.urlsafe_base64(public.asn1.dump()[26:]),
@@ -196,7 +196,7 @@ class PullkinBase:
                 "encryption_auth": keys["secret"],
             }
         )
-        logger.debug(data)
+        logger.debug(f"Data:\n{data}")
         req = Request(url=cls.FCM_SUBSCRIBE, data=data.encode("utf-8"))
         resp_data = cls._do_request(req, retries)
         return {"keys": keys, "fcm": json.loads(resp_data.decode("utf-8"))}
@@ -206,9 +206,9 @@ class PullkinBase:
         """register gcm and fcm tokens for sender_id"""
         app_id = "1:302251869498:android:90c5cd74bae68792813c03"
         subscription = cls.gcm_register(appId=app_id)
-        logger.debug(subscription)
+        logger.debug(f"GCM subscription data: {subscription}")
         fcm = cls.fcm_register(sender_id=sender_id, token=subscription["token"])
-        logger.debug(fcm)
+        logger.debug(f"FCM subscription data: {fcm}")
         res = {"gcm": subscription}
         res.update(fcm)
         return res

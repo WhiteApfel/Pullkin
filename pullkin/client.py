@@ -36,11 +36,12 @@ class Pullkin(PullkinBase):
         return res
 
     def __send(self, s, packet):
+        logger.debug(f"Send")
         header = bytearray([self.MCS_VERSION, self.PACKET_BY_TAG.index(type(packet))])
-        logger.debug(packet)
+        logger.debug(f"Packet:\n`{packet}`")
         payload = packet.SerializeToString()
         buf = bytes(header) + self._encode_varint32(len(payload)) + payload
-        logger.debug(hexlify(buf))
+        logger.debug(f"HEX buffer:\n`{hexlify(buf)}`")
         n = len(buf)
         total = 0
         while total < n:
@@ -50,23 +51,24 @@ class Pullkin(PullkinBase):
             total += sent
 
     def __recv(self, s, first=False):
+        logger.debug(f"Receive")
         if first:
             version, tag = struct.unpack("BB", self.__read(s, 2))
-            logger.debug("version {}".format(version))
+            logger.debug(f"Version {version}")
             if version < self.MCS_VERSION and version != 38:
                 raise RuntimeError("protocol version {} unsupported".format(version))
         else:
             (tag,) = struct.unpack("B", self.__read(s, 1))
-        logger.debug("tag {} ({})".format(tag, self.PACKET_BY_TAG[tag]))
+        logger.debug(f"Tag {tag} ({self.PACKET_BY_TAG[tag]})")
         size = self.__read_varint32(s)
-        logger.debug("size {}".format(size))
+        logger.debug(f"Size {size}")
         if size >= 0:
             buf = self.__read(s, size)
-            logger.debug(hexlify(buf))
+            logger.debug(f"HEX buffer:\n`{hexlify(buf)}`")
             Packet = self.PACKET_BY_TAG[tag]
             payload = Packet()
             payload.ParseFromString(buf)
-            logger.debug(payload)
+            logger.debug(f"Payload:\n`{payload}`")
             return payload
         return None
 
@@ -152,7 +154,7 @@ class Pullkin(PullkinBase):
         ssl_ctx = ssl.create_default_context()
         sock = socket.create_connection((self.PUSH_HOST, self.PUSH_PORT))
         s = ssl_ctx.wrap_socket(sock, server_hostname=host)
-        logger.debug("connected to ssl socket")
+        logger.debug(f"Connected to SSL socket {self.PUSH_HOST}:{self.PUSH_PORT} with default ssl_context")
         self.__listen(
             s, credentials, callback, received_persistent_ids, obj, timer, is_alive
         )
