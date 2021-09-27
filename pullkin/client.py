@@ -11,7 +11,7 @@ from loguru import logger
 from pullkin.client_base import PullkinBase
 from pullkin.proto.mcs_pb2 import *
 
-logger.disable('pullkin')
+logger.disable("pullkin")
 
 
 class Pullkin(PullkinBase):
@@ -154,7 +154,9 @@ class Pullkin(PullkinBase):
         ssl_ctx = ssl.create_default_context()
         sock = socket.create_connection((self.PUSH_HOST, self.PUSH_PORT))
         s = ssl_ctx.wrap_socket(sock, server_hostname=host)
-        logger.debug(f"Connected to SSL socket {self.PUSH_HOST}:{self.PUSH_PORT} with default ssl_context")
+        logger.debug(
+            f"Connected to SSL socket {self.PUSH_HOST}:{self.PUSH_PORT} with default ssl_context"
+        )
         self.__listen(
             s, credentials, callback, received_persistent_ids, obj, timer, is_alive
         )

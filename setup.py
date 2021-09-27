@@ -19,7 +19,7 @@ with open("README.md", "r") as f:
 
 
 def requirements():
-    with open('requirements.txt', 'r') as req:
+    with open("requirements.txt", "r") as req:
         return [r for r in req.read().split("\n") if r]
 
 

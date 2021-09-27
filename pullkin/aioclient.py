@@ -33,7 +33,9 @@ class AioPullkin(PullkinBase):
         self.__reader, self.__writer = await asyncio.open_connection(
             self.PUSH_HOST, self.PUSH_PORT, ssl=ssl_ctx
         )
-        logger.debug(f"Connected to SSL socket {self.PUSH_HOST}:{self.PUSH_PORT} with default ssl_context")
+        logger.debug(
+            f"Connected to SSL socket {self.PUSH_HOST}:{self.PUSH_PORT} with default ssl_context"
+        )
 
     async def __aioread(self, size):
         buf = b""
