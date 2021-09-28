@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import json
 import struct
+import traceback
 from asyncio import StreamWriter, StreamReader
 from base64 import urlsafe_b64decode
 from binascii import hexlify
@@ -14,6 +15,7 @@ from loguru import logger
 
 from pullkin.client_base import PullkinBase
 from pullkin.proto.mcs_proto import *
+from pullkin.proto.notification import Notification
 
 logger.disable("pullkin")
 
@@ -26,6 +28,31 @@ class AioPullkin(PullkinBase):
         self.credentials: dict = {}
         self.persistent_ids: list = []
         self.callback: Callable = None
+        self.on_notification_handlers: list = []
+        self.once = True
+
+    def on_notification(self, func: Callable = lambda *a, **k: True):
+
+        def decorator(callback):
+            self.on_notification_handlers.append({"callback": callback, "filter": func})
+            return callback
+
+        return decorator
+
+    def register_on_notification_handler(self, func: Callable = None, callback: Callable = None):
+        self.on_notification_handlers.append({"callback": callback, "filter": func})
+
+    async def __run_on_notification_callbacks(self, obj, notification, data_message):
+        for handler in self.on_notification_handlers:
+            if handler["filter"](obj, notification, data_message):
+                if inspect.iscoroutinefunction(handler["callback"]):
+                    await handler["callback"](obj, notification, data_message)
+                else:
+                    handler["callback"]((obj, notification, data_message))
+                if self.once:
+                    return
+        else:
+            self.callback
 
     @classmethod
     async def aioregister(cls, sender_id):
@@ -84,16 +111,15 @@ class AioPullkin(PullkinBase):
         if size >= 0:
             buf = await self.__aioread(size)
             logger.debug(f"HEX buffer:\n`{hexlify(buf)}`")
-            Packet = self.PACKET_BY_TAG[tag]
-            payload = Packet()
+            packet_class = self.PACKET_BY_TAG[tag]
+            payload = packet_class()
             payload.parse(buf)
             logger.debug(f"Payload:\n`{payload}`")
             return payload
         return None
 
     async def __aiolisthen_once(
-        self,
-        obj,
+            self,
     ):
         load_der_private_key = serialization.load_der_private_key
 
@@ -126,10 +152,8 @@ class AioPullkin(PullkinBase):
             version="aesgcm",
             auth_secret=secret,
         )
-        if inspect.iscoroutinefunction(self.callback):
-            await self.callback(obj, json.loads(decrypted.decode("utf-8")), p)
-        else:
-            self.callback(obj, json.loads(decrypted.decode("utf-8")), p)
+        notification = Notification(json.loads(decrypted.decode("utf-8")))
+        await self.__run_on_notification_callbacks({}, notification, p)
 
     async def __aiolisten_start(self):
         await self.gcm_check_in(**self.credentials["gcm"])
@@ -147,15 +171,11 @@ class AioPullkin(PullkinBase):
         req.setting.append(Setting(name="new_vc", value="1"))
         req.received_persistent_id.extend(self.persistent_ids)
         await self.__aiosend(req)
-        login_response = await self.__aiorecv(first=True)
+        await self.__aiorecv(first=True)
 
     async def __aiolisten_coroutine(self):
-        import cryptography.hazmat.primitives.serialization as serialization
-
-        load_der_private_key = serialization.load_der_private_key
-
         while True:
-            yield await self.__aiolisthen_once(load_der_private_key)
+            yield await self.__aiolisthen_once()
 
     async def listen_coroutine(self) -> Coroutine:
         if not (self.__reader or self.__writer):
@@ -183,5 +203,6 @@ class AioPullkin(PullkinBase):
                 await coroutine.asend(None)
                 await asyncio.sleep(timer)
         except Exception as e:
+            print(traceback.format_exc())
             self.__writer.close()
             await self.__writer.wait_closed()
