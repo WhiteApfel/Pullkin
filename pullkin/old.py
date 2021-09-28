@@ -9,19 +9,19 @@ import uuid
 from asyncio import StreamWriter, StreamReader
 from base64 import urlsafe_b64encode, urlsafe_b64decode
 from binascii import hexlify
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
+from loguru import logger
 from oscrypto.asymmetric import generate_pair
 
 from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuildProto
 from pullkin.proto.checkin_proto import AndroidCheckinRequest, AndroidCheckinResponse
 from pullkin.proto.mcs_proto import *
 
-from urllib.request import Request, urlopen
-from urllib.parse import urlencode
-
 unicode = str
 
-__log = logging.getLogger("pullkin")
+logger.disable("pullkin")
 
 SERVER_KEY = (
     b"\x04\x33\x94\xf7\xdf\xa1\xeb\xb1\xdc\x03\xa2\x5e\x15\x71\xdb\x48\xd3"
@@ -42,10 +42,10 @@ def __do_request(req, retries=5):
             resp = urlopen(req)
             resp_data = resp.read()
             resp.close()
-            __log.debug(resp_data)
+            logger.debug(resp_data)
             return resp_data
         except Exception as e:
-            __log.debug("error during request", exc_info=e)
+            logger.debug("error during request", exc_info=e)
             time.sleep(1)
     return None
 
@@ -77,7 +77,7 @@ def gcm_check_in(androidId=None, securityToken=None, **_):
     if securityToken:
         payload.security_token = int(securityToken)
 
-    __log.debug(payload)
+    logger.debug(payload)
     req = Request(
         url=CHECKIN_URL,
         headers={"Content-Type": "application/x-protobuf"},
@@ -86,7 +86,7 @@ def gcm_check_in(androidId=None, securityToken=None, **_):
     resp_data = __do_request(req)
     resp = AndroidCheckinResponse()
     resp.parse(resp_data)
-    __log.debug(resp)
+    logger.debug(resp)
     return resp.to_dict()
 
 
@@ -113,7 +113,7 @@ def gcm_register(appId, retries=5, **_):
     """
     # contains androidId, securityToken and more
     chk = gcm_check_in()
-    __log.debug(chk)
+    logger.debug(chk)
     body = {
         "app": "org.chromium.linux",
         "X-subtype": appId,
@@ -121,7 +121,7 @@ def gcm_register(appId, retries=5, **_):
         "sender": urlsafe_base64(SERVER_KEY),
     }
     data = urlencode(body)
-    __log.debug(data)
+    logger.debug(data)
     auth = "AidLogin {}:{}".format(chk["androidId"], chk["securityToken"])
     req = Request(
         url=REGISTER_URL, headers={"Authorization": auth}, data=data.encode("utf-8")
@@ -130,7 +130,7 @@ def gcm_register(appId, retries=5, **_):
         resp_data = __do_request(req, retries)
         if b"Error" in resp_data:
             err = resp_data.decode("utf-8")
-            __log.error("Register request has failed with " + err)
+            logger.error("Register request has failed with " + err)
             continue
         token = resp_data.decode("utf-8").split("=")[1]
         chkfields = {k: chk[k] for k in ["androidId", "securityToken"]}
@@ -156,10 +156,10 @@ def fcm_register(sender_id, token, retries=5):
     public, private = generate_pair("ec", curve=unicode("secp256r1"))
     from base64 import b64encode
 
-    __log.debug("# public")
-    __log.debug(b64encode(public.asn1.dump()))
-    __log.debug("# private")
-    __log.debug(b64encode(private.asn1.dump()))
+    logger.debug("# public")
+    logger.debug(b64encode(public.asn1.dump()))
+    logger.debug("# private")
+    logger.debug(b64encode(private.asn1.dump()))
     keys = {
         "public": urlsafe_base64(public.asn1.dump()[26:]),
         "private": urlsafe_base64(private.asn1.dump()),
@@ -173,7 +173,7 @@ def fcm_register(sender_id, token, retries=5):
             "encryption_auth": keys["secret"],
         }
     )
-    __log.debug(data)
+    logger.debug(data)
     req = Request(url=FCM_SUBSCRIBE, data=data.encode("utf-8"))
     resp_data = __do_request(req, retries)
     return {"keys": keys, "fcm": json.loads(resp_data.decode("utf-8"))}
@@ -183,9 +183,9 @@ def register(sender_id):
     """register gcm and fcm tokens for sender_id"""
     app_id = "wp:receiver.push.com#{}".format(uuid.uuid4())
     subscription = gcm_register(appId=app_id)
-    __log.debug(subscription)
+    logger.debug(subscription)
     fcm = fcm_register(sender_id=sender_id, token=subscription["token"])
-    __log.debug(fcm)
+    logger.debug(fcm)
     res = {"gcm": subscription}
     res.update(fcm)
     return res
@@ -272,10 +272,10 @@ def __encode_varint32(x):
 
 def __send(s, packet):
     header = bytearray([MCS_VERSION, PACKET_BY_TAG.index(type(packet))])
-    __log.debug(packet)
+    logger.debug(packet)
     payload = packet.SerializeToString()
     buf = bytes(header) + __encode_varint32(len(payload)) + payload
-    __log.debug(hexlify(buf))
+    logger.debug(hexlify(buf))
     n = len(buf)
     total = 0
     while total < n:
@@ -287,10 +287,10 @@ def __send(s, packet):
 
 async def __aiosend(writer: StreamWriter, packet):
     header = bytearray([MCS_VERSION, PACKET_BY_TAG.index(type(packet))])
-    __log.debug(packet)
+    logger.debug(packet)
     payload = packet.SerializeToString()
     buf = bytes(header) + __encode_varint32(len(payload)) + payload
-    __log.debug(hexlify(buf))
+    logger.debug(hexlify(buf))
     writer.write(buf)
     await writer.drain()
 
@@ -298,21 +298,21 @@ async def __aiosend(writer: StreamWriter, packet):
 def __recv(s, first=False):
     if first:
         version, tag = struct.unpack("BB", __read(s, 2))
-        __log.debug("version {}".format(version))
+        logger.debug("version {}".format(version))
         if version < MCS_VERSION and version != 38:
             raise RuntimeError("protocol version {} unsupported".format(version))
     else:
         (tag,) = struct.unpack("B", __read(s, 1))
-    __log.debug("tag {} ({})".format(tag, PACKET_BY_TAG[tag]))
+    logger.debug("tag {} ({})".format(tag, PACKET_BY_TAG[tag]))
     size = __read_varint32(s)
-    __log.debug("size {}".format(size))
+    logger.debug("size {}".format(size))
     if size >= 0:
         buf = __read(s, size)
-        __log.debug(hexlify(buf))
+        logger.debug(hexlify(buf))
         packet_class = PACKET_BY_TAG[tag]
         payload = packet_class()
         payload.parse(buf)
-        __log.debug(payload)
+        logger.debug(payload)
         return payload
     return None
 
@@ -320,21 +320,21 @@ def __recv(s, first=False):
 async def __aiorecv(reader: StreamReader, first=False):
     if first:
         version, tag = struct.unpack("BB", await __aioread(reader, 2))
-        __log.debug("version {}".format(version))
+        logger.debug("version {}".format(version))
         if version < MCS_VERSION and version != 38:
             raise RuntimeError("protocol version {} unsupported".format(version))
     else:
         (tag,) = struct.unpack("B", await __aioread(reader, 1))
-    __log.debug("tag {} ({})".format(tag, PACKET_BY_TAG[tag]))
+    logger.debug("tag {} ({})".format(tag, PACKET_BY_TAG[tag]))
     size = await __aioread_varint32(reader)
-    __log.debug("size {}".format(size))
+    logger.debug("size {}".format(size))
     if size >= 0:
         buf = await __aioread(reader, size)
-        __log.debug(hexlify(buf))
+        logger.debug(hexlify(buf))
         packet_class = PACKET_BY_TAG[tag]
         payload = packet_class()
         payload.parse(buf)
-        __log.debug(payload)
+        logger.debug(payload)
         return payload
     return None
 
@@ -484,7 +484,7 @@ def listen(
     context = ssl.create_default_context()
     sock = socket.create_connection((host, 5228))
     s = context.wrap_socket(sock, server_hostname=host)
-    __log.debug("connected to ssl socket")
+    logger.debug("connected to ssl socket")
     __listen(s, credentials, callback, received_persistent_ids, obj, timer, is_alive)
     s.close()
     sock.close()
@@ -509,13 +509,12 @@ async def aiolisten(
     """
     if received_persistent_ids is None:
         received_persistent_ids = []
-    import socket
     import ssl
 
     host = "mtalk.google.com"
     ssl_ctx = ssl.create_default_context()
     reader, writer = await asyncio.open_connection(host, 5228, ssl=ssl_ctx)
-    __log.debug("connected to ssl socket")
+    logger.debug("connected to ssl socket")
     await __aiolisten(
         reader,
         writer,
@@ -563,7 +562,7 @@ def run_example():
         with open(credentials_path, "w") as f:
             json.dump(credentials, f)
 
-    __log.debug(credentials)
+    logger.debug(credentials)
     print("send notifications to {}".format(credentials["fcm"]["token"]))
     if args.no_listen:
         return
