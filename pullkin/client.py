@@ -9,13 +9,14 @@ from binascii import hexlify
 from loguru import logger
 
 from pullkin.client_base import PullkinBase
-from pullkin.proto.mcs_pb2 import *
+from pullkin.proto.mcs_proto import *
 
 logger.disable("pullkin")
 
 
 class Pullkin(PullkinBase):
     def __init__(self):
+        super().__init__()
         ...
 
     def __read(self, s, size):
@@ -65,9 +66,9 @@ class Pullkin(PullkinBase):
         if size >= 0:
             buf = self.__read(s, size)
             logger.debug(f"HEX buffer:\n`{hexlify(buf)}`")
-            Packet = self.PACKET_BY_TAG[tag]
-            payload = Packet()
-            payload.ParseFromString(buf)
+            packet_class = self.PACKET_BY_TAG[tag]
+            payload = packet_class()
+            payload.parse(buf)
             logger.debug(f"Payload:\n`{payload}`")
             return payload
         return None
@@ -93,10 +94,10 @@ class Pullkin(PullkinBase):
         req.resource = credentials["gcm"]["androidId"]
         req.user = credentials["gcm"]["androidId"]
         req.use_rmq2 = True
-        req.setting.add(name="new_vc", value="1")
+        req.setting.append(Setting(name="new_vc", value="1"))
         req.received_persistent_id.extend(persistent_ids)
         self.__send(s, req)
-        login_response = self.__recv(s, first=True)
+        self.__recv(s, first=True)
         while is_alive:
             p = self.__recv(s)
             if type(p) is not DataMessageStanza:
