@@ -1,11 +1,3 @@
-# This is free and unencumbered software released into the public domain.
-#
-# Anyone is free to copy, modify, publish, use, compile, sell, or
-# distribute this software, either in source code form or as a compiled
-# binary, for any purpose, commercial or non-commercial, and by any
-# means.
-#
-# For more information, please refer to <http://unlicense.org/>
 import asyncio
 import inspect
 import json
@@ -18,12 +10,11 @@ from asyncio import StreamWriter, StreamReader
 from base64 import urlsafe_b64encode, urlsafe_b64decode
 from binascii import hexlify
 
-from google.protobuf.json_format import MessageToDict
 from oscrypto.asymmetric import generate_pair
 
-from pullkin.proto.android_checkin_pb2 import AndroidCheckinProto, ChromeBuildProto
-from pullkin.proto.checkin_pb2 import AndroidCheckinRequest, AndroidCheckinResponse
-from pullkin.proto.mcs_pb2 import *
+from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuildProto
+from pullkin.proto.checkin_proto import AndroidCheckinRequest, AndroidCheckinResponse
+from pullkin.proto.mcs_proto import *
 
 from urllib.request import Request, urlopen
 from urllib.parse import urlencode
@@ -59,7 +50,7 @@ def __do_request(req, retries=5):
     return None
 
 
-def gcm_check_in(androidId=None, securityToken=None, **kwargs):
+def gcm_check_in(androidId=None, securityToken=None, **_):
     """
     perform check-in request
 
@@ -75,11 +66,11 @@ def gcm_check_in(androidId=None, securityToken=None, **kwargs):
 
     checkin = AndroidCheckinProto()
     checkin.type = 3
-    checkin.chrome_build.CopyFrom(chrome)
+    checkin.chrome_build.from_dict(chrome.to_dict())
 
     payload = AndroidCheckinRequest()
     payload.user_serial_number = 0
-    payload.checkin.CopyFrom(checkin)
+    payload.checkin.from_dict(checkin.to_dict())
     payload.version = 3
     if androidId:
         payload.id = int(androidId)
@@ -94,9 +85,9 @@ def gcm_check_in(androidId=None, securityToken=None, **kwargs):
     )
     resp_data = __do_request(req)
     resp = AndroidCheckinResponse()
-    resp.ParseFromString(resp_data)
+    resp.parse(resp_data)
     __log.debug(resp)
-    return MessageToDict(resp)
+    return resp.to_dict()
 
 
 def urlsafe_base64(data):
@@ -110,7 +101,7 @@ def urlsafe_base64(data):
     return res.replace(b"\n", b"").decode("ascii")
 
 
-def gcm_register(appId, retries=5, **kwargs):
+def gcm_register(appId, retries=5, **_):
     """
     obtains a gcm token
 
@@ -190,8 +181,8 @@ def fcm_register(sender_id, token, retries=5):
 
 def register(sender_id):
     """register gcm and fcm tokens for sender_id"""
-    appId = "wp:receiver.push.com#{}".format(uuid.uuid4())
-    subscription = gcm_register(appId=appId)
+    app_id = "wp:receiver.push.com#{}".format(uuid.uuid4())
+    subscription = gcm_register(appId=app_id)
     __log.debug(subscription)
     fcm = fcm_register(sender_id=sender_id, token=subscription["token"])
     __log.debug(fcm)
@@ -300,7 +291,6 @@ async def __aiosend(writer: StreamWriter, packet):
     payload = packet.SerializeToString()
     buf = bytes(header) + __encode_varint32(len(payload)) + payload
     __log.debug(hexlify(buf))
-    n = len(buf)
     writer.write(buf)
     await writer.drain()
 
@@ -319,9 +309,9 @@ def __recv(s, first=False):
     if size >= 0:
         buf = __read(s, size)
         __log.debug(hexlify(buf))
-        Packet = PACKET_BY_TAG[tag]
-        payload = Packet()
-        payload.ParseFromString(buf)
+        packet_class = PACKET_BY_TAG[tag]
+        payload = packet_class()
+        payload.parse(buf)
         __log.debug(payload)
         return payload
     return None
@@ -341,9 +331,9 @@ async def __aiorecv(reader: StreamReader, first=False):
     if size >= 0:
         buf = await __aioread(reader, size)
         __log.debug(hexlify(buf))
-        Packet = PACKET_BY_TAG[tag]
-        payload = Packet()
-        payload.ParseFromString(buf)
+        packet_class = PACKET_BY_TAG[tag]
+        payload = packet_class()
+        payload.parse(buf)
         __log.debug(payload)
         return payload
     return None
@@ -377,10 +367,10 @@ def __listen(s, credentials, callback, persistent_ids, obj, timer=0, is_alive=Tr
     req.resource = credentials["gcm"]["androidId"]
     req.user = credentials["gcm"]["androidId"]
     req.use_rmq2 = True
-    req.setting.add(name="new_vc", value="1")
+    req.setting.append(Setting(name="new_vc", value="1"))
     req.received_persistent_id.extend(persistent_ids)
     __send(s, req)
-    login_response = __recv(s, first=True)
+    __recv(s, first=True)
     while is_alive:
         p = __recv(s)
         if type(p) is not DataMessageStanza:
@@ -433,10 +423,10 @@ async def __aiolisten(
     req.resource = credentials["gcm"]["androidId"]
     req.user = credentials["gcm"]["androidId"]
     req.use_rmq2 = True
-    req.setting.add(name="new_vc", value="1")
+    req.setting.append(Setting(name="new_vc", value="1"))
     req.received_persistent_id.extend(persistent_ids)
     await __aiosend(writer, req)
-    login_response = await __aiorecv(reader, first=True)
+    await __aiorecv(reader, first=True)
     while is_alive:
         p = await __aiorecv(reader)
         if type(p) is not DataMessageStanza:
@@ -523,8 +513,6 @@ async def aiolisten(
     import ssl
 
     host = "mtalk.google.com"
-    context = ssl.create_default_context()
-    sock = socket.create_connection((host, 5228))
     ssl_ctx = ssl.create_default_context()
     reader, writer = await asyncio.open_connection(host, 5228, ssl=ssl_ctx)
     __log.debug("connected to ssl socket")
