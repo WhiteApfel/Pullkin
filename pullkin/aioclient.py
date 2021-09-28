@@ -20,6 +20,7 @@ logger.disable("pullkin")
 
 class AioPullkin(PullkinBase):
     def __init__(self):
+        super().__init__()
         self.__reader: Optional[StreamReader] = None
         self.__writer: Optional[StreamWriter] = None
         self.credentials: dict = {}

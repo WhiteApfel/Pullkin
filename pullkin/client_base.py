@@ -1,3 +1,5 @@
+import asyncio
+import inspect
 import json
 from loguru import logger
 import os
@@ -5,7 +7,7 @@ import time
 import uuid
 from base64 import urlsafe_b64encode
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from httpx import Client, AsyncClient, Request
 
 from google.protobuf.json_format import MessageToDict
 from oscrypto.asymmetric import generate_pair
@@ -56,13 +58,29 @@ class PullkinBase:
         "TalkMetadata",
     ]
 
+    http_client = Client()
+
+    def __init__(self):
+        # if init AioPullkin then replace Client instance with AsyncClient
+        try:
+            parent = inspect.getouterframes(inspect.currentframe())[1]
+            if parent.frame.f_locals['__class__'].__name__ == 'AioPullkin':
+                self.http_client = AsyncClient()
+        except Exception as e:
+            ...
+
     @classmethod
     def _do_request(cls, req, retries=5):
         for _ in range(retries):
             try:
-                resp = urlopen(req)
-                resp_data = resp.read()
-                resp.close()
+                if type(cls.http_client) is Client:
+                    resp = cls.http_client.send(req)
+                else:
+                    async def async_request():
+                        return await cls.http_client.send(req)
+                    new_feature = asyncio.run(async_request())
+                    print(new_feature)
+                resp_data = resp.content
                 logger.debug(f"Response:\n{resp_data}")
                 return resp_data
             except Exception as e:
@@ -100,9 +118,10 @@ class PullkinBase:
 
         logger.debug(f"Payload:\n{payload}")
         req = Request(
+            method="GET",
             url=cls.CHECKIN_URL,
             headers={"Content-Type": "application/x-protobuf"},
-            data=payload.SerializeToString(),
+            content=payload.SerializeToString(),
         )
         resp_data = cls._do_request(req)
         resp = AndroidCheckinResponse()
@@ -145,9 +164,10 @@ class PullkinBase:
         logger.debug(f"Data:\n{data}")
         auth = "AidLogin {}:{}".format(chk["androidId"], chk["securityToken"])
         req = Request(
+            method="GET",
             url=cls.REGISTER_URL,
             headers={"Authorization": auth},
-            data=data.encode("utf-8"),
+            content=data.encode("utf-8"),
         )
         for _ in range(retries):
             resp_data = cls._do_request(req, retries)
@@ -197,7 +217,7 @@ class PullkinBase:
             }
         )
         logger.debug(f"Data:\n{data}")
-        req = Request(url=cls.FCM_SUBSCRIBE, data=data.encode("utf-8"))
+        req = Request(method="GET", url=cls.FCM_SUBSCRIBE, content=data.encode("utf-8"))
         resp_data = cls._do_request(req, retries)
         return {"keys": keys, "fcm": json.loads(resp_data.decode("utf-8"))}
 
