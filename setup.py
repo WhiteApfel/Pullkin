@@ -1,6 +1,6 @@
 #!/bin/env python
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 push_receiver_classifiers = [
     "Programming Language :: Python :: 3",
@@ -25,7 +25,7 @@ def requirements():
 
 setup(
     name="pullkin",
-    version="0.3.1a7",
+    version="0.4.1a1",
     author="Franc[e]sco & WhiteApfel",
     author_email="white@pfel.ru",
     url="https://github.com/WhiteApfel/pullkin",

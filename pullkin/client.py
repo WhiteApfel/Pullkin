@@ -76,8 +76,8 @@ class Pullkin(PullkinBase):
     def __listen(
         self, s, credentials, callback, persistent_ids, obj, timer=0, is_alive=True
     ):
-        import http_ece
         import cryptography.hazmat.primitives.serialization as serialization
+        import http_ece
         from cryptography.hazmat.backends import default_backend
 
         load_der_private_key = serialization.load_der_private_key

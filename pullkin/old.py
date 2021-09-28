@@ -6,8 +6,8 @@ import os
 import struct
 import time
 import uuid
-from asyncio import StreamWriter, StreamReader
-from base64 import urlsafe_b64encode, urlsafe_b64decode
+from asyncio import StreamReader, StreamWriter
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 from binascii import hexlify
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -15,8 +15,10 @@ from urllib.request import Request, urlopen
 from loguru import logger
 from oscrypto.asymmetric import generate_pair
 
-from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuildProto
-from pullkin.proto.checkin_proto import AndroidCheckinRequest, AndroidCheckinResponse
+from pullkin.proto.android_checkin_proto import (AndroidCheckinProto,
+                                                 ChromeBuildProto)
+from pullkin.proto.checkin_proto import (AndroidCheckinRequest,
+                                         AndroidCheckinResponse)
 from pullkin.proto.mcs_proto import *
 
 unicode = str
@@ -349,8 +351,8 @@ def __app_data_by_key(p, key, blow_shit_up=True):
 
 
 def __listen(s, credentials, callback, persistent_ids, obj, timer=0, is_alive=True):
-    import http_ece
     import cryptography.hazmat.primitives.serialization as serialization
+    import http_ece
     from cryptography.hazmat.backends import default_backend
 
     load_der_private_key = serialization.load_der_private_key
@@ -405,8 +407,8 @@ def __listen(s, credentials, callback, persistent_ids, obj, timer=0, is_alive=Tr
 async def __aiolisten(
     reader, writer, credentials, callback, persistent_ids, obj, timer=0, is_alive=True
 ):
-    import http_ece
     import cryptography.hazmat.primitives.serialization as serialization
+    import http_ece
     from cryptography.hazmat.backends import default_backend
 
     load_der_private_key = serialization.load_der_private_key
@@ -532,9 +534,10 @@ async def aiolisten(
 def run_example():
     """sample that registers a token and waits for notifications"""
     import argparse
-    import sys
-    import appdirs
     import os.path
+    import sys
+
+    import appdirs
 
     parser = argparse.ArgumentParser(description="push_receiver demo")
     parser.add_argument("--sender-id")

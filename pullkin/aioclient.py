@@ -3,10 +3,10 @@ import inspect
 import json
 import struct
 import traceback
-from asyncio import StreamWriter, StreamReader
+from asyncio import StreamReader, StreamWriter
 from base64 import urlsafe_b64decode
 from binascii import hexlify
-from typing import Optional, Callable, Union, Coroutine
+from typing import Callable, Coroutine, Optional, Union
 
 import cryptography.hazmat.primitives.serialization as serialization
 import http_ece
@@ -32,14 +32,15 @@ class AioPullkin(PullkinBase):
         self.once = True
 
     def on_notification(self, func: Callable = lambda *a, **k: True):
-
         def decorator(callback):
             self.on_notification_handlers.append({"callback": callback, "filter": func})
             return callback
 
         return decorator
 
-    def register_on_notification_handler(self, func: Callable = None, callback: Callable = None):
+    def register_on_notification_handler(
+        self, func: Callable = None, callback: Callable = None
+    ):
         self.on_notification_handlers.append({"callback": callback, "filter": func})
 
     async def __run_on_notification_callbacks(self, obj, notification, data_message):
@@ -119,7 +120,7 @@ class AioPullkin(PullkinBase):
         return None
 
     async def __aiolisthen_once(
-            self,
+        self,
     ):
         load_der_private_key = serialization.load_der_private_key
 
