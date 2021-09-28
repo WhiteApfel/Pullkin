@@ -25,7 +25,7 @@ def requirements():
 
 setup(
     name="pullkin",
-    version="0.3.1a6",
+    version="0.3.1a7",
     author="Franc[e]sco & WhiteApfel",
     author_email="white@pfel.ru",
     url="https://github.com/WhiteApfel/pullkin",
