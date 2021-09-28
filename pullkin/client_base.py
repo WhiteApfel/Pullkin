@@ -10,10 +10,8 @@ from httpx import AsyncClient, Request
 from loguru import logger
 from oscrypto.asymmetric import generate_pair
 
-from pullkin.proto.android_checkin_proto import (AndroidCheckinProto,
-                                                 ChromeBuildProto)
-from pullkin.proto.checkin_proto import (AndroidCheckinRequest,
-                                         AndroidCheckinResponse)
+from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuildProto
+from pullkin.proto.checkin_proto import AndroidCheckinRequest, AndroidCheckinResponse
 from pullkin.proto.mcs_proto import *
 
 nest_asyncio.apply()
@@ -222,6 +220,11 @@ class PullkinBase:
 
     @classmethod
     def register(cls, sender_id):
+        """
+        Sync version. Register "app" for receive pushed
+
+        Returns "app"-credential in dict for receive "personal" push by token
+        """
         res = asyncio.get_event_loop().run_until_complete(cls._register(sender_id))
         return res
 

@@ -31,17 +31,75 @@ class AioPullkin(PullkinBase):
         self.on_notification_handlers: list = []
         self.once = True
 
-    def on_notification(self, func: Callable = lambda *a, **k: True):
+    def on_notification(self, filter: Callable = lambda *a, **k: True):
+        """
+        Decorator
+
+        Registers a new callback with filter rule to trigger this callback
+
+        First param to be passed into filter or callback: some object. Now is empty dict.
+        Later you will be able to passed your object
+        Second param: Notification object. You can read about Notification here: TODO: add a link
+        Third param: Message object that get from socket. With all data about message. Read hereL TODO: add a link
+
+        :: python code
+            from pullkin import AioPullkin, Notification, DataMessageStanza as Message
+            pullkin = AuiPullkin()
+
+            @pullkin.on_notification(lambda o, n, m: n.title == "Moi koleni zamerzli")
+            def on_zemfira(obj, notification, message):
+                print(notification.notification.body)
+
+            @pullkin.on_notification(lambda o, n, m: n.priority == "normal")
+            async def on_normal(obj: dict, notification: Notification, message: Message):
+                print(f"#{message.id} @{message.sent})
+                print(notification")
+                await asyncio.sleep(2)
+                print("=-)")
+
+        """
+
         def decorator(callback):
-            self.on_notification_handlers.append({"callback": callback, "filter": func})
+            self.on_notification_handlers.append(
+                {"callback": callback, "filter": filter}
+            )
             return callback
 
         return decorator
 
     def register_on_notification_handler(
-        self, func: Callable = None, callback: Callable = None
+        self, filter: Callable = None, callback: Callable = None
     ):
-        self.on_notification_handlers.append({"callback": callback, "filter": func})
+        """
+        Function
+
+        Registers a new callback with filter rule to trigger this callback
+
+        filter: rule for calling thit callback
+        callback: function to be called if the filter-function returns True
+
+        First param to be passed into filter and callback: some object. Now is empty dict.
+        Later you will be able to passed your object
+        Second param: Notification object. You can read about Notification here: TODO: add a link
+        Third param: Message object that get from socket. With all data about message. Read hereL TODO: add a link
+
+        :: python code
+            from pullkin import AioPullkin, Notification, DataMessageStanza as Message
+            pullkin = AuiPullkin()
+
+            @pullkin.on_notification(lambda o, n, m: n.title == "Moi koleni zamerzli")
+            def on_zemfira(obj, notification, message):
+                print(notification.notification.body)
+
+            @pullkin.on_notification(lambda o, n, m: n.priority == "normal")
+            async def on_normal(obj: dict, notification: Notification, message: Message):
+                print(f"#{message.id} @{message.sent})
+                print(notification")
+                await asyncio.sleep(2)
+                print("=-)")
+
+        """
+        self.on_notification_handlers.append({"callback": callback, "filter": filter})
 
     async def __run_on_notification_callbacks(self, obj, notification, data_message):
         for handler in self.on_notification_handlers:
@@ -57,6 +115,11 @@ class AioPullkin(PullkinBase):
 
     @classmethod
     async def aioregister(cls, sender_id):
+        """
+        Async version. Register "app" for receive pushed
+
+        Returns "app"-credential in dict for receive "personal" push by token
+        """
         return await cls._register(sender_id)
 
     async def __open_connection(self):
@@ -179,20 +242,41 @@ class AioPullkin(PullkinBase):
             yield await self.__aiolisthen_once()
 
     async def listen_coroutine(self) -> Coroutine:
+        """
+        Return a listener-coroutine
+
+        Every coroutine iteration is one received push
+        (or not, because it starts reading and waiting for data on socket)
+
+        You can use coroutine like this, for example:
+
+        :: python code
+            # <some code>
+
+            await coroutine.asend(None)  # One push will be received and distributed
+
+            # <some code>
+
+            for _ in range(10): # Ten pushes will be received
+                await coroutine.asend(None)
+
+            # <some code>
+
+        :return: coroutine
+        """
         if not (self.__reader or self.__writer):
             await self.__open_connection()
         coroutine = self.__aiolisten_coroutine()
         return coroutine
 
-    async def listen_forever(self, timer: Union[int, float] = 1) -> None:
+    async def listen_forever(self, timer: Union[int, float] = 0.05) -> None:
         """
-        listens for push notifications
+        Listens for push notifications
 
-        credentials: credentials object returned by register()
-        callback(obj, notification, data_message): called on notifications
-        received_persistent_ids: any persistent id's you already received.
-                                 array of strings
-        obj: optional arbitrary value passed to callback
+        Runs an endless loop for reading notifications and distributing among callbacks based on filter results
+
+        :param timer: timer in seconds between receive iteration
+        :type timer: ``int`` or ``float``, optional, default ``0.05``
         """
         if not (self.__reader or self.__writer):
             await self.__open_connection()
