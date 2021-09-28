@@ -1,21 +1,20 @@
 import asyncio
-import inspect
 import json
-from loguru import logger
 import os
 import time
-import uuid
 from base64 import urlsafe_b64encode
 from urllib.parse import urlencode
-from httpx import Client, AsyncClient, Request
 
-from google.protobuf.json_format import MessageToDict
+import nest_asyncio
+from httpx import AsyncClient, Request
+from loguru import logger
 from oscrypto.asymmetric import generate_pair
 
 from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuildProto
 from pullkin.proto.checkin_proto import AndroidCheckinRequest, AndroidCheckinResponse
 from pullkin.proto.mcs_proto import *
 
+nest_asyncio.apply()
 logger.disable("pullkin")
 
 
@@ -58,28 +57,16 @@ class PullkinBase:
         "TalkMetadata",
     ]
 
-    http_client = Client()
+    http_client = AsyncClient()
 
     def __init__(self):
-        # if init AioPullkin then replace Client instance with AsyncClient
-        try:
-            parent = inspect.getouterframes(inspect.currentframe())[1]
-            if parent.frame.f_locals['__class__'].__name__ == 'AioPullkin':
-                self.http_client = AsyncClient()
-        except Exception as e:
-            ...
+        ...
 
     @classmethod
-    def _do_request(cls, req, retries=5):
+    async def _do_request(cls, req, retries=5):
         for _ in range(retries):
             try:
-                if type(cls.http_client) is Client:
-                    resp = cls.http_client.send(req)
-                else:
-                    async def async_request():
-                        return await cls.http_client.send(req)
-                    new_feature = asyncio.run(async_request())
-                    print(new_feature)
+                resp = await cls.http_client.send(req, timeout=5)
                 resp_data = resp.content
                 logger.debug(f"Response:\n{resp_data}")
                 return resp_data
@@ -89,7 +76,7 @@ class PullkinBase:
         return None
 
     @classmethod
-    def gcm_check_in(cls, androidId=None, securityToken=None, **_):
+    async def gcm_check_in(cls, androidId=None, securityToken=None, **_):
         """
         perform check-in request
 
@@ -123,7 +110,7 @@ class PullkinBase:
             headers={"Content-Type": "application/x-protobuf"},
             content=payload.SerializeToString(),
         )
-        resp_data = cls._do_request(req)
+        resp_data = await cls._do_request(req)
         resp = AndroidCheckinResponse()
         resp.parse(resp_data)
         logger.debug(f"Response:\n{resp}")
@@ -141,7 +128,7 @@ class PullkinBase:
         return res.replace(b"\n", b"").decode("ascii")
 
     @classmethod
-    def gcm_register(cls, appId, retries=5, **_):
+    async def gcm_register(cls, appId, retries=5, **_):
         """
         obtains a gcm token
 
@@ -152,7 +139,7 @@ class PullkinBase:
                  "securityToken": 123123}
         """
         # contains androidId, securityToken and more
-        chk = cls.gcm_check_in()
+        chk = await cls.gcm_check_in()
         logger.debug(f"Check_in:\n{chk}")
         body = {
             "app": "org.chromium.linux",
@@ -170,7 +157,7 @@ class PullkinBase:
             data=body,
         )
         for _ in range(retries):
-            resp_data = cls._do_request(req, retries)
+            resp_data = await cls._do_request(req, retries)
             if b"Error" in resp_data:
                 err = resp_data.decode("utf-8")
                 logger.error(f"Register request has failed with {err}")
@@ -183,7 +170,7 @@ class PullkinBase:
         return None
 
     @classmethod
-    def fcm_register(cls, sender_id, token, retries=5):
+    async def fcm_register(cls, sender_id, token, retries=5):
         """
         generates key pair and obtains a fcm token
 
@@ -216,19 +203,24 @@ class PullkinBase:
         }
         logger.debug(f"Data:\n{body}")
         req = Request(method="POST", url=cls.FCM_SUBSCRIBE, data=body)
-        resp_data = cls._do_request(req, retries)
+        resp_data = await cls._do_request(req, retries)
         return {"keys": keys, "fcm": json.loads(resp_data.decode("utf-8"))}
 
     @classmethod
-    def register(cls, sender_id):
+    async def _register(cls, sender_id):
         """register gcm and fcm tokens for sender_id"""
         app_id = "1:302251869498:android:90c5cd74bae68792813c03"
-        subscription = cls.gcm_register(appId=app_id)
+        subscription = await cls.gcm_register(appId=app_id)
         logger.debug(f"GCM subscription data: {subscription}")
-        fcm = cls.fcm_register(sender_id=sender_id, token=subscription["token"])
+        fcm = await cls.fcm_register(sender_id=sender_id, token=subscription["token"])
         logger.debug(f"FCM subscription data: {fcm}")
         res = {"gcm": subscription}
         res.update(fcm)
+        return res
+
+    @classmethod
+    def register(cls, sender_id):
+        res = asyncio.get_event_loop().run_until_complete(cls._register(sender_id))
         return res
 
     @classmethod

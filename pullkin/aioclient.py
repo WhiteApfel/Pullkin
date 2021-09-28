@@ -27,6 +27,10 @@ class AioPullkin(PullkinBase):
         self.persistent_ids: list = []
         self.callback: Callable = None
 
+    @classmethod
+    async def aioregister(cls, sender_id):
+        return await cls._register(sender_id)
+
     async def __open_connection(self):
         import ssl
 
@@ -128,7 +132,7 @@ class AioPullkin(PullkinBase):
             self.callback(obj, json.loads(decrypted.decode("utf-8")), p)
 
     async def __aiolisten_start(self):
-        self.gcm_check_in(**self.credentials["gcm"])
+        await self.gcm_check_in(**self.credentials["gcm"])
         req = LoginRequest()
         req.adaptive_heartbeat = False
         req.auth_service = 2
