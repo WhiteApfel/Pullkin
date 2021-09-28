@@ -118,7 +118,7 @@ class PullkinBase:
 
         logger.debug(f"Payload:\n{payload}")
         req = Request(
-            method="GET",
+            method="POST",
             url=cls.CHECKIN_URL,
             headers={"Content-Type": "application/x-protobuf"},
             content=payload.SerializeToString(),
@@ -164,10 +164,10 @@ class PullkinBase:
         logger.debug(f"Data:\n{data}")
         auth = "AidLogin {}:{}".format(chk["androidId"], chk["securityToken"])
         req = Request(
-            method="GET",
+            method="POST",
             url=cls.REGISTER_URL,
             headers={"Authorization": auth},
-            content=data.encode("utf-8"),
+            data=body,
         )
         for _ in range(retries):
             resp_data = cls._do_request(req, retries)
@@ -208,16 +208,14 @@ class PullkinBase:
             "private": cls.urlsafe_base64(private.asn1.dump()),
             "secret": cls.urlsafe_base64(os.urandom(16)),
         }
-        data = urlencode(
-            {
-                "authorized_entity": sender_id,
-                "endpoint": "{}/{}".format(cls.FCM_ENDPOINT, token),
-                "encryption_key": keys["public"],
-                "encryption_auth": keys["secret"],
-            }
-        )
-        logger.debug(f"Data:\n{data}")
-        req = Request(method="GET", url=cls.FCM_SUBSCRIBE, content=data.encode("utf-8"))
+        body = {
+            "authorized_entity": sender_id,
+            "endpoint": "{}/{}".format(cls.FCM_ENDPOINT, token),
+            "encryption_key": keys["public"],
+            "encryption_auth": keys["secret"],
+        }
+        logger.debug(f"Data:\n{body}")
+        req = Request(method="POST", url=cls.FCM_SUBSCRIBE, data=body)
         resp_data = cls._do_request(req, retries)
         return {"keys": keys, "fcm": json.loads(resp_data.decode("utf-8"))}
 
