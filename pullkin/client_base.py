@@ -125,7 +125,7 @@ class PullkinBase:
         )
         resp_data = cls._do_request(req)
         resp = AndroidCheckinResponse()
-        resp.FromString(resp_data)
+        resp.parse(resp_data)
         logger.debug(f"Response:\n{resp}")
         return resp.to_dict()
 
