@@ -33,7 +33,7 @@ class Notification:
                 self.__setattr__(k, v)
 
     def __getitem__(self, item):
-        return self.raw_data['item']
+        return self.raw_data[item]
 
     def __str__(self):
         return str(self.__dict__)
