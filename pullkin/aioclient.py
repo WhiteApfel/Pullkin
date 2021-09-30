@@ -6,7 +6,7 @@ import traceback
 from asyncio import StreamReader, StreamWriter
 from base64 import urlsafe_b64decode
 from binascii import hexlify
-from typing import Callable, Coroutine, Optional, Union
+from typing import Callable, Coroutine, Optional, Union, AsyncGenerator
 
 import cryptography.hazmat.primitives.serialization as serialization
 import http_ece
@@ -102,6 +102,7 @@ class AioPullkin(PullkinBase):
         self.on_notification_handlers.append({"callback": callback, "filter": filter})
 
     async def __run_on_notification_callbacks(self, obj, notification, data_message):
+        x = 0
         for handler in self.on_notification_handlers:
             if handler["filter"](obj, notification, data_message):
                 if inspect.iscoroutinefunction(handler["callback"]):
@@ -110,8 +111,12 @@ class AioPullkin(PullkinBase):
                     handler["callback"]((obj, notification, data_message))
                 if self.once:
                     return
+                x += 1
         else:
             self.callback
+
+        if not x:
+            logger.debug('No one callback was called')
 
     @classmethod
     async def aioregister(cls, sender_id):
@@ -237,11 +242,11 @@ class AioPullkin(PullkinBase):
         await self.__aiosend(req)
         await self.__aiorecv(first=True)
 
-    async def __aiolisten_coroutine(self):
+    async def __aiolisten_coroutine(self) -> AsyncGenerator:
         while True:
             yield await self.__aiolisthen_once()
 
-    async def listen_coroutine(self) -> Coroutine:
+    async def listen_coroutine(self) -> AsyncGenerator:
         """
         Return a listener-coroutine
 
@@ -266,6 +271,7 @@ class AioPullkin(PullkinBase):
         """
         if not (self.__reader or self.__writer):
             await self.__open_connection()
+        await self.__aiolisten_start()
         coroutine = self.__aiolisten_coroutine()
         return coroutine
 
@@ -284,10 +290,19 @@ class AioPullkin(PullkinBase):
         await self.__aiolisten_start()
         coroutine = self.__aiolisten_coroutine()
         try:
-            while True:
+            while self.__reader and self.__writer:
                 await coroutine.asend(None)
                 await asyncio.sleep(timer)
         except Exception as e:
             print(traceback.format_exc())
-            self.__writer.close()
-            await self.__writer.wait_closed()
+        finally:
+            if self.__writer:
+                self.__writer.close()
+                await self.__writer.wait_closed()
+
+    async def close(self):
+        await self.http_client.aclose()
+        self.__writer.close()
+        await self.__writer.wait_closed()
+        self.__writer = None
+        self.__reader = None

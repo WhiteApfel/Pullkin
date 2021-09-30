@@ -62,6 +62,9 @@ class PullkinBase:
     def __init__(self):
         ...
 
+    async def close(self):
+        await self.http_client.aclose()
+
     @classmethod
     async def _do_request(cls, req, retries=5):
         for _ in range(retries):
