@@ -301,8 +301,12 @@ class AioPullkin(PullkinBase):
                 await self.__writer.wait_closed()
 
     async def close(self):
-        await self.http_client.aclose()
-        self.__writer.close()
-        await self.__writer.wait_closed()
-        self.__writer = None
-        self.__reader = None
+        try:
+            await self.http_client.aclose()
+            if self.__writer:
+                self.__writer.close()
+                await self.__writer.wait_closed()
+            self.__writer = None
+            self.__reader = None
+        except ConnectionResetError:
+            return
