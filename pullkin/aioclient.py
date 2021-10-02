@@ -6,7 +6,7 @@ import traceback
 from asyncio import StreamReader, StreamWriter
 from base64 import urlsafe_b64decode
 from binascii import hexlify
-from typing import Callable, Coroutine, Optional, Union, AsyncGenerator
+from typing import Callable, Optional, Union, AsyncGenerator
 
 import cryptography.hazmat.primitives.serialization as serialization
 import http_ece
@@ -302,7 +302,8 @@ class AioPullkin(PullkinBase):
 
     async def close(self):
         try:
-            await self.http_client.aclose()
+            if self.http_client:
+                await self.http_client.aclose()
             if self.__writer:
                 self.__writer.close()
                 await self.__writer.wait_closed()
