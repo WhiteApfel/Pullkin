@@ -12,8 +12,8 @@ I almost didn't write anything to consider it my intellectual property,
 just wrapped the code already written by Franc[e]sco in a design convenient for my own use 
 
 Note that for the listening part Franc[e]sco has to pull in http-ece which depends
-on a full blown native crypto library rather than just oscrypto. it is
-an optional dependency so you'll have to install it explicitly by depending
+on a full-blown native crypto library rather than just oscrypto. it is
+an optional dependency, so you'll have to install it explicitly by depending
 on `pullkin[listen]`
 
 ## Usage
