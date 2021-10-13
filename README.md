@@ -16,6 +16,12 @@ on a full-blown native crypto library rather than just oscrypto. it is
 an optional dependency, so you'll have to install it explicitly by depending
 on `pullkin[listen]`
 
+## Differences
+
+* Add async listener
+* Add async listener-coroutine
+* Replace functions with class of listener
+
 ## Usage
 
 ```shell
