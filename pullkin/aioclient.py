@@ -113,7 +113,11 @@ class AioPullkin(PullkinBase):
                     return
                 x += 1
         else:
-            self.callback
+            if self.callback:
+                if inspect.iscoroutinefunction(self.callback):
+                    await self.callback(obj, notification, data_message)
+                else:
+                    self.callback(obj, notification, data_message)
 
         if not x:
             logger.debug('No one callback was called')
