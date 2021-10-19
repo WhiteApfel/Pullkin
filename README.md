@@ -1,5 +1,7 @@
 # Pullkin
 
+[![CodeFactor](https://www.codefactor.io/repository/github/whiteapfel/pullkin/badge/master)](https://www.codefactor.io/repository/github/whiteapfel/pullkin/overview/master)
+
 Like Pushkin, but subscribe to FCM (GCM) and receive notifications
 
 My alternative implementation 
