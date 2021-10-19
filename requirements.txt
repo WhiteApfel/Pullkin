@@ -7,3 +7,4 @@ loguru~=0.5.3
 betterproto~=1.2.5
 httpx~=0.18.2
 nest_asyncio~=1.4.3
+http-ece~=1.1.0

@@ -35,6 +35,5 @@ setup(
     license="Mozilla Public License 2.0",
     classifiers=push_receiver_classifiers,
     keywords="fcm gcm push notification receive firebase google",
-    install_requires=requirements(),
-    extras_require={"listen": ["http-ece"], "example": ["appdirs"]},
+    install_requires=requirements()
 )
