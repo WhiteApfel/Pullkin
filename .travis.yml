@@ -6,7 +6,9 @@ python:
   - "3.10-dev"
   - "pypy3.7-7.3.5"
 
-install: pip install .[listen,example]
+install:
+  - pip install -r requirements.txt
+  - pip install -r requirements-dev.txt
 
 script:
-  - python -m "pullkin" --sender-id=722915550290 --no-listen
+  - pytest
