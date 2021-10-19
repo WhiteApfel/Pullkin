@@ -1,8 +1,9 @@
 #!/bin/env python
+from os import environ
 
 from setuptools import find_packages, setup
 
-push_receiver_classifiers = [
+pullkin_classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
@@ -24,7 +25,7 @@ def requirements():
 
 setup(
     name="pullkin",
-    version="0.4.1a5",
+    version=environ.get("TAG_VERSION").replace("v", ""),
     author="WhiteApfel",
     author_email="white@pfel.ru",
     url="https://github.com/WhiteApfel/pullkin",
@@ -33,7 +34,7 @@ setup(
     long_description=push_receiver_readme,
     long_description_content_type="text/markdown",
     license="Mozilla Public License 2.0",
-    classifiers=push_receiver_classifiers,
+    classifiers=pullkin_classifiers,
     keywords="fcm gcm push notification receive firebase google",
     install_requires=requirements()
 )
