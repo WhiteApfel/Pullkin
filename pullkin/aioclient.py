@@ -109,9 +109,9 @@ class AioPullkin(PullkinBase):
                     await handler["callback"](obj, notification, data_message)
                 else:
                     handler["callback"](obj, notification, data_message)
-                if self.once:
-                    return
                 x += 1
+                if self.once:
+                    break
         else:
             if self.callback:
                 if inspect.iscoroutinefunction(self.callback):
