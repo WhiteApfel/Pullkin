@@ -15,4 +15,4 @@ def test_registration():
 
 
 def test_travis_dict():
-    pass
+    from typing import Dict
