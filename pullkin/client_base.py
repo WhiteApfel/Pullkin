@@ -107,11 +107,12 @@ class PullkinBase:
             payload.security_token = int(securityToken)
 
         logger.debug(f"Payload:\n{payload}")
-        req = Request(
+        req = cls.http_client.build_request(
             method="POST",
             url=cls.CHECKIN_URL,
             headers={"Content-Type": "application/x-protobuf"},
             content=payload.SerializeToString(),
+            timeout=5
         )
         resp_data = await cls._do_request(req)
         resp = AndroidCheckinResponse()
