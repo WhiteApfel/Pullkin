@@ -12,7 +12,3 @@ async def test_aio_registration():
 def test_registration():
     client = Pullkin()
     credentials = client.register(581003993230)
-
-
-def test_travis_dict():
-    from typing import Dict
