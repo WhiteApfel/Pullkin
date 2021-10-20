@@ -69,7 +69,7 @@ class PullkinBase:
     async def _do_request(cls, req, retries=5):
         for _ in range(retries):
             try:
-                resp = await cls.http_client.send(req, timeout=5)
+                resp = await cls.http_client.send(req, follow_redirects=True)
                 resp_data = resp.content
                 logger.debug(f"Response:\n{resp_data}")
                 return resp_data
