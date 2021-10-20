@@ -4,6 +4,7 @@
 [![Build Status](https://app.travis-ci.com/WhiteApfel/Pullkin.svg?branch=master)](https://app.travis-ci.com/WhiteApfel/Pullkin)
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FWhiteApfel%2FPullkin.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FWhiteApfel%2FPullkin?ref=badge_shield)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/pullkin)
+![GitHub](https://img.shields.io/github/license/whiteapfel/pullkin)
 
 Like Pushkin, but subscribe to FCM (GCM) and receive notifications
 
