@@ -53,14 +53,14 @@ with open(".persistent_ids.txt", "r") as f:
 
 
 @pullkin.on_notification()
-async def on_notification(obj, notification: Message, data_message):
+async def on_notification(obj, message: Message, data_message):
     idstr = data_message.persistent_id + "\n"
     with open(".persistent_ids.txt", "r") as f:
         if idstr in f:
             return
     with open(".persistent_ids.txt", "a") as f:
         f.write(idstr)
-    print(notification)
+    print(message.notification)
 
 
 async def main():
