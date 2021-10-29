@@ -44,7 +44,7 @@ pip install pullkin
 import asyncio
 
 from pullkin import AioPullkin
-from pullkin.models.notification import Notification, NotificationData
+from pullkin.models.message import Notification, NotificationData
 
 pullkin = AioPullkin()
 
