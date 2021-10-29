@@ -6,6 +6,7 @@
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/pullkin)
 ![GitHub](https://img.shields.io/github/license/whiteapfel/pullkin)
 ![GitHub last commit](https://img.shields.io/github/last-commit/whiteapfel/pullkin)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pullkin)
 
 Like Pushkin, but subscribe to FCM (GCM) and receive notifications
 
