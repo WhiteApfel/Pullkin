@@ -15,7 +15,7 @@ from loguru import logger
 
 from pullkin.client_base import PullkinBase
 from pullkin.proto.mcs_proto import *
-from pullkin.proto.notification import Notification
+from pullkin.models.notification import Notification
 
 logger.disable("pullkin")
 

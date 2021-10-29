@@ -44,12 +44,13 @@ pip install pullkin
 import asyncio
 
 from pullkin import AioPullkin
-from pullkin.proto.notification import Notification, NotificationData
+from pullkin.models.notification import Notification, NotificationData
 
 pullkin = AioPullkin()
 
 with open(".persistent_ids.txt", "r") as f:
     received_persistent_ids = [x.strip() for x in f]
+
 
 @pullkin.on_notification()
 async def on_notification(obj, notification: Notification, data_message):
@@ -61,8 +62,10 @@ async def on_notification(obj, notification: Notification, data_message):
         f.write(idstr)
     print(notification)
 
+
 async def main():
     await pullkin.listen_forever()
+
 
 asyncio.run(main())
 ```
