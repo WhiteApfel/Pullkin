@@ -13,7 +13,7 @@ My alternative implementation
 of [python implementation](https://github.com/Francesco149/push_receiver) 
 of [JS implementation](https://github.com/MatthieuLemoine/push-receiver)
 
-Tested on python (3.9.6, TODO: other versions)
+Tested on python (3.6, 3.8, 3.10, pypy3.7-7.3.5)
 
 I almost didn't write anything to consider it my intellectual property, 
 just wrapped the code already written by Franc[e]sco in a design convenient for my own use 
