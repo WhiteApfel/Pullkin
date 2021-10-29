@@ -15,7 +15,7 @@ from loguru import logger
 
 from pullkin.client_base import PullkinBase
 from pullkin.proto.mcs_proto import *
-from pullkin.models.message import Notification
+from pullkin.models.message import Message
 
 logger.disable("pullkin")
 
@@ -225,7 +225,7 @@ class AioPullkin(PullkinBase):
             version="aesgcm",
             auth_secret=secret,
         )
-        notification = Notification(json.loads(decrypted.decode("utf-8")))
+        notification = Message(json.loads(decrypted.decode("utf-8")))
         await self.__run_on_notification_callbacks({}, notification, p)
 
     async def __aiolisten_start(self):

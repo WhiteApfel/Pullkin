@@ -17,7 +17,7 @@ class NotificationData:
         return str(self.__dict__)
 
 
-class Notification:
+class Message:
     def __init__(self, data: dict = None):
         if not data:
             data = {}
