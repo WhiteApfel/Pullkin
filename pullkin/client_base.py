@@ -3,6 +3,7 @@ import json
 import os
 import time
 from base64 import urlsafe_b64encode
+from typing import Union
 from urllib.parse import urlencode
 
 import nest_asyncio
@@ -55,6 +56,16 @@ class PullkinBase:
         "BindAccountRequest",
         "BindAccountResponse",
         "TalkMetadata",
+    ]
+    packet_union = Union[
+        HeartbeatPing,
+        HeartbeatAck,
+        LoginRequest,
+        LoginResponse,
+        Close,
+        IqStanza,
+        DataMessageStanza,
+        StreamErrorStanza,
     ]
 
     http_client = AsyncClient()

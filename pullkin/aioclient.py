@@ -131,7 +131,7 @@ class AioPullkin(PullkinBase):
         """
         return await cls._register(sender_id)
 
-    async def __open_connection(self):
+    async def __open_connection(self) -> None:
         import ssl
 
         ssl_ctx = ssl.create_default_context()
@@ -142,13 +142,13 @@ class AioPullkin(PullkinBase):
             f"Connected to SSL socket {self.PUSH_HOST}:{self.PUSH_PORT} with default ssl_context"
         )
 
-    async def __aioread(self, size):
+    async def __aioread(self, size) -> bytes:
         buf = b""
         while len(buf) < size:
             buf += await self.__reader.read(size - len(buf))
         return buf
 
-    async def __aioread_varint32(self):
+    async def __aioread_varint32(self) -> int:
         res = 0
         shift = 0
         while True:
@@ -159,7 +159,7 @@ class AioPullkin(PullkinBase):
             shift += 7
         return res
 
-    async def __aiosend(self, packet):
+    async def __aiosend(self, packet) -> None:
         logger.debug(f"Send")
         header = bytearray([self.MCS_VERSION, self.PACKET_BY_TAG.index(type(packet))])
         logger.debug(f"Packet:\n'{packet}'")
@@ -169,7 +169,7 @@ class AioPullkin(PullkinBase):
         self.__writer.write(buf)
         await self.__writer.drain()
 
-    async def __aiorecv(self, first=False):
+    async def __aiorecv(self, first=False) -> Optional[PullkinBase.packet_union]:
         logger.debug(f"Receive")
         if first:
             version, tag = struct.unpack("BB", await self.__aioread(2))
@@ -193,7 +193,7 @@ class AioPullkin(PullkinBase):
 
     async def __aiolisthen_once(
         self,
-    ):
+    ) -> None:
         load_der_private_key = serialization.load_der_private_key
 
         p = await self.__aiorecv()
@@ -228,7 +228,7 @@ class AioPullkin(PullkinBase):
         notification = Message(json.loads(decrypted.decode("utf-8")))
         await self.__run_on_notification_callbacks({}, notification, p)
 
-    async def __aiolisten_start(self):
+    async def __aiolisten_start(self) -> None:
         await self.gcm_check_in(**self.credentials["gcm"])
         req = LoginRequest()
         req.adaptive_heartbeat = False
