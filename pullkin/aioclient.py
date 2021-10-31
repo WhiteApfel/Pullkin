@@ -191,7 +191,7 @@ class AioPullkin(PullkinBase):
             return payload
         return None
 
-    async def __aiolisthen_once(
+    async def __aiolisten_once(
         self,
     ) -> None:
         load_der_private_key = serialization.load_der_private_key
