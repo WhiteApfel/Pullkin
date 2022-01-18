@@ -308,6 +308,7 @@ class AioPullkin(PullkinBase):
         try:
             if self._http_client:
                 await self._http_client.aclose()
+                self.__class__._http_client = None
             if self.__writer:
                 self.__writer.close()
                 await self.__writer.wait_closed()

@@ -82,6 +82,7 @@ class PullkinBase:
     async def close(self):
         if self._http_client:
             await self._http_client.aclose()
+            self.__class__._http_client = None
 
     @classmethod
     async def _do_request(cls, req, retries=5):
