@@ -306,8 +306,8 @@ class AioPullkin(PullkinBase):
 
     async def close(self):
         try:
-            if self.http_client:
-                await self.http_client.aclose()
+            if self._http_client:
+                await self._http_client.aclose()
             if self.__writer:
                 self.__writer.close()
                 await self.__writer.wait_closed()

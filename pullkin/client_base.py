@@ -68,13 +68,20 @@ class PullkinBase:
         StreamErrorStanza,
     ]
 
-    http_client = AsyncClient()
+    _http_client = AsyncClient()
 
     def __init__(self):
         ...
 
+    @property
+    def http_client(self):
+        if not self._http_client:
+            self._http_client = AsyncClient()
+        return self._http_client
+
     async def close(self):
-        await self.http_client.aclose()
+        if self._http_client:
+            await self._http_client.aclose()
 
     @classmethod
     async def _do_request(cls, req, retries=5):
@@ -87,7 +94,7 @@ class PullkinBase:
             except Exception as e:
                 logger.opt(exception=e).debug("Error during request:")
                 time.sleep(1)
-        return None
+        raise ConnectionError
 
     @classmethod
     async def gcm_check_in(cls, androidId=None, securityToken=None, **_):
