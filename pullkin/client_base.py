@@ -94,7 +94,7 @@ class PullkinBase:
             except Exception as e:
                 logger.opt(exception=e).debug("Error during request:")
                 time.sleep(1)
-        raise ConnectionError
+        raise ConnectionError(f"Error during request: {e}")
 
     @classmethod
     async def gcm_check_in(cls, androidId=None, securityToken=None, **_):
