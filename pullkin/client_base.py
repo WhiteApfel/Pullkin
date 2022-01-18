@@ -68,16 +68,16 @@ class PullkinBase:
         StreamErrorStanza,
     ]
 
-    _http_client = AsyncClient()
+    _http_client = None
 
     def __init__(self):
         ...
 
-    @property
-    def http_client(self):
-        if not self._http_client:
-            self._http_client = AsyncClient()
-        return self._http_client
+    @classmethod
+    def http_client(cls):
+        if not cls._http_client:
+            cls._http_client = AsyncClient()
+        return cls._http_client
 
     async def close(self):
         if self._http_client:
@@ -87,7 +87,7 @@ class PullkinBase:
     async def _do_request(cls, req, retries=5):
         for _ in range(retries):
             try:
-                resp = await cls.http_client.send(req, follow_redirects=True)
+                resp = await cls.http_client().send(req, follow_redirects=True)
                 resp_data = resp.content
                 logger.debug(f"Response:\n{resp_data}")
                 return resp_data
@@ -125,7 +125,7 @@ class PullkinBase:
             payload.security_token = int(securityToken)
 
         logger.debug(f"Payload:\n{payload}")
-        req = cls.http_client.build_request(
+        req = cls.http_client().build_request(
             method="POST",
             url=cls.CHECKIN_URL,
             headers={"Content-Type": "application/x-protobuf"},

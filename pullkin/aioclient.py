@@ -248,7 +248,7 @@ class AioPullkin(PullkinBase):
 
     async def __aiolisten_coroutine(self) -> AsyncGenerator:
         while True:
-            yield await self.__aiolisthen_once()
+            yield await self.__aiolisten_once()
 
     async def listen_coroutine(self) -> AsyncGenerator:
         """
