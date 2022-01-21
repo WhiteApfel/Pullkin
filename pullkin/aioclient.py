@@ -311,8 +311,10 @@ class AioPullkin(PullkinBase):
                 self._http_client = None
             if self.__writer:
                 self.__writer.close()
-                await self.__writer.wait_closed()
+                await asyncio.wait_for(self.__writer.wait_closed(), 5)
             self.__writer = None
             self.__reader = None
+        except TimeoutError:
+            return
         except ConnectionResetError:
             return
