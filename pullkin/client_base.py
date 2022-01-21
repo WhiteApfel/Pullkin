@@ -68,27 +68,24 @@ class PullkinBase:
         StreamErrorStanza,
     ]
 
-    _http_client = None
-
     def __init__(self):
-        ...
+        self._http_client = None
 
-    @classmethod
-    def http_client(cls):
-        if not cls._http_client:
-            cls._http_client = AsyncClient()
-        return cls._http_client
+    @property
+    def http_client(self):
+        if not self._http_client:
+            self._http_client = AsyncClient()
+        return self._http_client
 
     async def close(self):
         if self._http_client:
             await self._http_client.aclose()
             self.__class__._http_client = None
 
-    @classmethod
-    async def _do_request(cls, req, retries=5):
+    async def _do_request(self, req, retries=5):
         for _ in range(retries):
             try:
-                resp = await cls.http_client().send(req, follow_redirects=True)
+                resp = await self.http_client.send(req, follow_redirects=True)
                 resp_data = resp.content
                 logger.debug(f"Response:\n{resp_data}")
                 return resp_data
@@ -97,8 +94,7 @@ class PullkinBase:
                 time.sleep(1)
         raise ConnectionError(f"Error during request: {e}")
 
-    @classmethod
-    async def gcm_check_in(cls, androidId=None, securityToken=None, **_):
+    async def gcm_check_in(self, androidId=None, securityToken=None, **_):
         """
         perform check-in request
 
@@ -126,14 +122,14 @@ class PullkinBase:
             payload.security_token = int(securityToken)
 
         logger.debug(f"Payload:\n{payload}")
-        req = cls.http_client().build_request(
+        req = self.http_client.build_request(
             method="POST",
-            url=cls.CHECKIN_URL,
+            url=self.CHECKIN_URL,
             headers={"Content-Type": "application/x-protobuf"},
             content=payload.SerializeToString(),
             timeout=5
         )
-        resp_data = await cls._do_request(req)
+        resp_data = await self._do_request(req)
         resp = AndroidCheckinResponse()
         resp.parse(resp_data)
         logger.debug(f"Response:\n{resp}")
@@ -150,8 +146,7 @@ class PullkinBase:
         res = urlsafe_b64encode(data).replace(b"=", b"")
         return res.replace(b"\n", b"").decode("ascii")
 
-    @classmethod
-    async def gcm_register(cls, appId, retries=5, **_):
+    async def gcm_register(self, appId, retries=5, **_):
         """
         obtains a gcm token
 
@@ -162,25 +157,25 @@ class PullkinBase:
                  "securityToken": 123123}
         """
         # contains androidId, securityToken and more
-        chk = await cls.gcm_check_in()
+        chk = await self.gcm_check_in()
         logger.debug(f"Check_in:\n{chk}")
         body = {
             "app": "org.chromium.linux",
             "X-subtype": appId,
             "device": chk["androidId"],
-            "sender": cls.urlsafe_base64(cls.SERVER_KEY),
+            "sender": self.urlsafe_base64(self.SERVER_KEY),
         }
         data = urlencode(body)
         logger.debug(f"Data:\n{data}")
         auth = "AidLogin {}:{}".format(chk["androidId"], chk["securityToken"])
         req = Request(
             method="POST",
-            url=cls.REGISTER_URL,
+            url=self.REGISTER_URL,
             headers={"Authorization": auth},
             data=body,
         )
         for _ in range(retries):
-            resp_data = await cls._do_request(req, retries)
+            resp_data = await self._do_request(req, retries)
             if b"Error" in resp_data:
                 err = resp_data.decode("utf-8")
                 logger.error(f"Register request has failed with {err}")
@@ -192,8 +187,7 @@ class PullkinBase:
             return res
         return None
 
-    @classmethod
-    async def fcm_register(cls, sender_id, token, retries=5):
+    async def fcm_register(self, sender_id, token, retries=5):
         """
         generates key pair and obtains a fcm token
 
@@ -206,7 +200,7 @@ class PullkinBase:
         # https://lapo.it/asn1js
         # first byte of public key is skipped for some reason
         # maybe it's always zero
-        public, private = generate_pair("ec", curve=cls.unicode("secp256r1"))
+        public, private = generate_pair("ec", curve=self.unicode("secp256r1"))
         from base64 import b64encode
 
         logger.debug("# Public")
@@ -214,41 +208,39 @@ class PullkinBase:
         logger.debug("# Private")
         logger.debug(b64encode(private.asn1.dump()))
         keys = {
-            "public": cls.urlsafe_base64(public.asn1.dump()[26:]),
-            "private": cls.urlsafe_base64(private.asn1.dump()),
-            "secret": cls.urlsafe_base64(os.urandom(16)),
+            "public": self.urlsafe_base64(public.asn1.dump()[26:]),
+            "private": self.urlsafe_base64(private.asn1.dump()),
+            "secret": self.urlsafe_base64(os.urandom(16)),
         }
         body = {
             "authorized_entity": sender_id,
-            "endpoint": "{}/{}".format(cls.FCM_ENDPOINT, token),
+            "endpoint": "{}/{}".format(self.FCM_ENDPOINT, token),
             "encryption_key": keys["public"],
             "encryption_auth": keys["secret"],
         }
         logger.debug(f"Data:\n{body}")
-        req = Request(method="POST", url=cls.FCM_SUBSCRIBE, data=body)
-        resp_data = await cls._do_request(req, retries)
+        req = Request(method="POST", url=self.FCM_SUBSCRIBE, data=body)
+        resp_data = await self._do_request(req, retries)
         return {"keys": keys, "fcm": json.loads(resp_data.decode("utf-8"))}
 
-    @classmethod
-    async def _register(cls, sender_id):
+    async def _register(self, sender_id):
         """register gcm and fcm tokens for sender_id"""
         app_id = "1:302251869498:android:90c5cd74bae68792813c03"
-        subscription = await cls.gcm_register(appId=app_id)
+        subscription = await self.gcm_register(appId=app_id)
         logger.debug(f"GCM subscription data: {subscription}")
-        fcm = await cls.fcm_register(sender_id=sender_id, token=subscription["token"])
+        fcm = await self.fcm_register(sender_id=sender_id, token=subscription["token"])
         logger.debug(f"FCM subscription data: {fcm}")
         res = {"gcm": subscription}
         res.update(fcm)
         return res
 
-    @classmethod
-    def register(cls, sender_id):
+    def register(self, sender_id):
         """
         Sync version. Register "app" for receive pushed
 
         Returns "app"-credential in dict for receive "personal" push by token
         """
-        res = asyncio.get_event_loop().run_until_complete(cls._register(sender_id))
+        res = asyncio.get_event_loop().run_until_complete(self._register(sender_id))
         return res
 
     @classmethod
