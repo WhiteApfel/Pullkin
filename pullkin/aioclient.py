@@ -314,7 +314,7 @@ class AioPullkin(PullkinBase):
                 await asyncio.wait_for(self.__writer.wait_closed(), 5)
             self.__writer = None
             self.__reader = None
-        except TimeoutError:
+        except asyncio.exceptions.TimeoutError:
             return
         except ConnectionResetError:
             return
