@@ -89,8 +89,10 @@ class PullkinBase:
                 resp_data = resp.content
                 logger.debug(f"Response:\n{resp_data}")
                 return resp_data
+            except ValueError as e:
+                ...
             except Exception as e:
-                logger.opt(exception=e).debug("Error during request:")
+                logger.opt(exception=e).error("Error during request:")
                 time.sleep(1)
         raise ConnectionError(f"Error during request: {e}")
 
