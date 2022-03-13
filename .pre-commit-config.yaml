@@ -17,7 +17,7 @@ repos:
     rev: 3.8.4
     hooks:
     -   id: flake8
-        args: [--max-line-length=127]
+        args: [--max-line-length=127, --per-file-ignores=__init__.py:F401, --ignore=F405]
         exclude: ^migrations/
         stages:
         - commit
@@ -27,6 +27,7 @@ repos:
     hooks:
       - id: isort
         files: 'pullkin/.*'
+        args: [--profile=black]
         stages:
         - commit
         - push
@@ -35,3 +36,7 @@ repos:
         stages:
         - commit
         - push
+-   repo: https://github.com/psf/black
+    rev: 22.1.0
+    hooks:
+      - id: black
