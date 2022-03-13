@@ -189,7 +189,7 @@ class PullkinBase:
             return res
         return None
 
-    async def fcm_register(self, sender_id, token, retries=5):
+    async def fcm_register(self, sender_id: Union[str, int], token, retries=5):
         """
         generates key pair and obtains a fcm token
 
@@ -215,7 +215,7 @@ class PullkinBase:
             "secret": self.urlsafe_base64(os.urandom(16)),
         }
         body = {
-            "authorized_entity": sender_id,
+            "authorized_entity": int(sender_id),
             "endpoint": "{}/{}".format(self.FCM_ENDPOINT, token),
             "encryption_key": keys["public"],
             "encryption_auth": keys["secret"],
@@ -225,7 +225,7 @@ class PullkinBase:
         resp_data = await self._do_request(req, retries)
         return {"keys": keys, "fcm": json.loads(resp_data.decode("utf-8"))}
 
-    async def _register(self, sender_id):
+    async def _register(self, sender_id: Union[str, int]):
         """register gcm and fcm tokens for sender_id"""
         app_id = "1:302251869498:android:90c5cd74bae68792813c03"
         subscription = await self.gcm_register(appId=app_id)
@@ -236,7 +236,7 @@ class PullkinBase:
         res.update(fcm)
         return res
 
-    def register(self, sender_id):
+    def register(self, sender_id: Union[str, int]):
         """
         Sync version. Register "app" for receive pushed
 
