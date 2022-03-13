@@ -1,0 +1,37 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.3.0
+    hooks:
+    -   id: check-docstring-first
+        stages:
+        - commit
+        - push
+    -   id: check-merge-conflict
+        stages:
+        - push
+    -   id: requirements-txt-fixer
+        stages:
+          - commit
+          - push
+-   repo: https://gitlab.com/pycqa/flake8
+    rev: 3.8.4
+    hooks:
+    -   id: flake8
+        args: [--max-line-length=127]
+        exclude: ^migrations/
+        stages:
+        - commit
+        - push
+-   repo: https://github.com/pycqa/isort
+    rev: 5.5.2
+    hooks:
+      - id: isort
+        files: 'pullkin/.*'
+        stages:
+        - commit
+        - push
+      - id: isort
+        files: 'tests/.*'
+        stages:
+        - commit
+        - push
