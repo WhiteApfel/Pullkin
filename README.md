@@ -2,7 +2,6 @@
 
 [![CodeFactor](https://www.codefactor.io/repository/github/whiteapfel/pullkin/badge/master)](https://www.codefactor.io/repository/github/whiteapfel/pullkin/overview/master)
 [![Build Status](https://app.travis-ci.com/WhiteApfel/Pullkin.svg?branch=master)](https://app.travis-ci.com/WhiteApfel/Pullkin)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FWhiteApfel%2FPullkin.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FWhiteApfel%2FPullkin?ref=badge_shield)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/pullkin)
 ![GitHub](https://img.shields.io/github/license/whiteapfel/pullkin)
 ![GitHub last commit](https://img.shields.io/github/last-commit/whiteapfel/pullkin)
@@ -41,12 +40,19 @@ pip install pullkin
 ### How to use
 
 ```python
+import json
+import os.path
 import asyncio
 
 from pullkin import AioPullkin
-from pullkin.models.message import Message
+from pullkin.models import Message, AppCredentials
 
+SENDER_ID = '<<SENDER_ID>>'
 pullkin = AioPullkin()
+
+if not os.path.exists('.persistent_ids.txt'):
+        with open('.persistent_ids.txt', 'w+') as f:
+            ...
 
 with open(".persistent_ids.txt", "r") as f:
     received_persistent_ids = [x.strip() for x in f]
@@ -64,6 +70,13 @@ async def on_notification(obj, message: Message, data_message):
 
 
 async def main():
+    if not os.path.exists('.pullkin_app_credentials'):
+        with open('.pullkin_app_credentials', 'w+') as f:
+            credentials = pullkin.register(SENDER_ID)
+            f.write(json.dumps(credentials.dict()))
+    else:
+        with open('.pullkin_app_credentials', 'r') as f:
+            pullkin.credentials = AppCredentials(**json.loads(f.read()))
     await pullkin.run()
 
 
