@@ -32,5 +32,5 @@ async def test_aio_receive(fcm: FirebaseAdmin):
 
     message: Message = await asyncio.wait_for(wait_notification(), timeout=10)
 
-    message.notification.title == notification_title
-    message.notification.body == notification_body
+    assert message.notification.title == notification_title
+    assert message.notification.body == notification_body
