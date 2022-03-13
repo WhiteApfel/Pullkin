@@ -192,7 +192,7 @@ class AioPullkin(PullkinBase):
 
     async def __aiolisten_once(
         self,
-    ) -> None:
+    ) -> Message:
         load_der_private_key = serialization.load_der_private_key
 
         p = await self.__aiorecv()
@@ -226,6 +226,7 @@ class AioPullkin(PullkinBase):
         )
         notification = Message(json.loads(decrypted.decode("utf-8")))
         await self.__run_on_notification_callbacks({}, notification, p)
+        return notification
 
     async def _aiolisten_start(self) -> None:
         await self.gcm_check_in(self.credentials.gcm)

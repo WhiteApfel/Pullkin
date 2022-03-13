@@ -1,3 +1,4 @@
+import json
 from os import getenv
 
 from dotenv import load_dotenv, find_dotenv
@@ -5,4 +6,5 @@ from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv())
 
 SENDER_ID = getenv('FIREBASE_SENDER_ID')
-print(SENDER_ID)
+SERVICE_ACCOUNT_CRED = json.loads(getenv('FIREBASE_SERVICE_ACCOUNT'))
+SERVER_KEY = getenv('FIREBASE_SERVER_KEY')

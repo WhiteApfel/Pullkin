@@ -1,6 +1,6 @@
 import pytest
 
-from pullkin import AioPullkin, Pullkin
+from pullkin import AioPullkin
 from tests.testdata import SENDER_ID
 
 
