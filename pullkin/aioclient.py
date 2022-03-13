@@ -32,7 +32,7 @@ class AioPullkin(PullkinBase):
         self.once = True
         self._started = False
 
-    def on_notification(self, filter: Callable = lambda *a, **k: True):
+    def on_notification(self, handler_filter: Callable = lambda *a, **k: True):
         """
         Decorator
 
@@ -62,14 +62,14 @@ class AioPullkin(PullkinBase):
 
         def decorator(callback):
             self.on_notification_handlers.append(
-                {"callback": callback, "filter": filter}
+                {"callback": callback, "filter": handler_filter}
             )
             return callback
 
         return decorator
 
     def register_on_notification_handler(
-        self, filter: Callable = None, callback: Callable = None
+        self, handler_filter: Callable = None, callback: Callable = None
     ):
         """
         Function
@@ -100,7 +100,7 @@ class AioPullkin(PullkinBase):
                 print("=-)")
 
         """
-        self.on_notification_handlers.append({"callback": callback, "filter": filter})
+        self.on_notification_handlers.append({"callback": callback, "filter": handler_filter})
 
     async def __run_on_notification_callbacks(self, obj, notification, data_message):
         x = 0
@@ -123,14 +123,13 @@ class AioPullkin(PullkinBase):
         if not x:
             logger.debug('No one callback was called')
 
-    @classmethod
-    async def aioregister(cls, sender_id):
+    async def aioregister(self, sender_id):
         """
         Async version. Register "app" for receive pushed
 
         Returns "app"-credential in dict for receive "personal" push by token
         """
-        return await cls._register(sender_id)
+        return await self._register(sender_id)
 
     async def __open_connection(self) -> None:
         import ssl
@@ -211,9 +210,9 @@ class AioPullkin(PullkinBase):
         salt = salt[5:]  # strip salt=
         crypto_key = urlsafe_b64decode(crypto_key.encode("ascii"))
         salt = urlsafe_b64decode(salt.encode("ascii"))
-        der_data = self.credentials["keys"]["private"]
+        der_data = self.credentials.keys.private
         der_data = urlsafe_b64decode(der_data.encode("ascii") + b"========")
-        secret = self.credentials["keys"]["secret"]
+        secret = self.credentials.keys.secret
         secret = urlsafe_b64decode(secret.encode("ascii") + b"========")
         privkey = load_der_private_key(
             der_data, password=None, backend=default_backend()
@@ -230,17 +229,17 @@ class AioPullkin(PullkinBase):
         await self.__run_on_notification_callbacks({}, notification, p)
 
     async def __aiolisten_start(self) -> None:
-        await self.gcm_check_in(**self.credentials["gcm"])
+        await self.gcm_check_in(self.credentials.gcm)
         req = LoginRequest()
         req.adaptive_heartbeat = False
         req.auth_service = 2
-        req.auth_token = self.credentials["gcm"]["securityToken"]
+        req.auth_token = self.credentials.gcm.securityToken
         req.id = "chrome-91.0.3234.0"
         req.domain = "mcs.android.com"
-        req.device_id = "android-%x" % int(self.credentials["gcm"]["androidId"])
+        req.device_id = "android-%x" % int(self.credentials.gcm.androidId)
         req.network_type = 1
-        req.resource = self.credentials["gcm"]["androidId"]
-        req.user = self.credentials["gcm"]["androidId"]
+        req.resource = self.credentials.gcm.androidId
+        req.user = self.credentials.gcm.androidId
         req.use_rmq2 = True
         req.setting.append(Setting(name="new_vc", value="1"))
         req.received_persistent_id.extend(self.persistent_ids)

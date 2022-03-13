@@ -3,7 +3,7 @@ import json
 import os
 import time
 from base64 import urlsafe_b64encode
-from typing import Union
+from typing import Optional, Union
 from urllib.parse import urlencode
 
 import nest_asyncio
@@ -11,7 +11,7 @@ from httpx import AsyncClient, Request
 from loguru import logger
 from oscrypto.asymmetric import generate_pair
 
-from pullkin.models.message import AppCredentials
+from pullkin.models.message import AppCredentials, AppCredentialsGcm
 from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuildProto
 from pullkin.proto.checkin_proto import AndroidCheckinRequest, AndroidCheckinResponse
 from pullkin.proto.mcs_proto import *
@@ -97,7 +97,7 @@ class PullkinBase:
                 time.sleep(1)
         raise ConnectionError(f"Error during request: {e}")
 
-    async def gcm_check_in(self, androidId=None, securityToken=None, **_):
+    async def gcm_check_in(self, credentials: Optional[AppCredentialsGcm] = None):
         """
         perform check-in request
 
@@ -119,10 +119,9 @@ class PullkinBase:
         payload.user_serial_number = 0
         payload.checkin.from_dict(checkin.to_dict())
         payload.version = 3
-        if androidId:
-            payload.id = int(androidId)
-        if securityToken:
-            payload.security_token = int(securityToken)
+        if credentials:
+            payload.id = int(credentials.androidId)
+            payload.security_token = int(credentials.securityToken)
 
         logger.debug(f"Payload:\n{payload}")
         req = self.http_client.build_request(
