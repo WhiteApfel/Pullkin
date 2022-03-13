@@ -5,6 +5,6 @@ from dotenv import find_dotenv, load_dotenv
 
 load_dotenv(find_dotenv())
 
-SENDER_ID = getenv('FIREBASE_SENDER_ID')
-SERVICE_ACCOUNT_CRED = json.loads(getenv('FIREBASE_SERVICE_ACCOUNT'))
-SERVER_KEY = getenv('FIREBASE_SERVER_KEY')
+SENDER_ID = getenv("FIREBASE_SENDER_ID")
+SERVICE_ACCOUNT_CRED = json.loads(getenv("FIREBASE_SERVICE_ACCOUNT"))
+SERVER_KEY = getenv("FIREBASE_SERVER_KEY")

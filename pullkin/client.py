@@ -9,7 +9,7 @@ from binascii import hexlify
 from loguru import logger
 
 from pullkin.client_base import PullkinBase
-from pullkin.proto.mcs_proto import *
+from pullkin.proto.mcs_proto import *  # noqa: F403
 
 logger.disable("pullkin")
 
@@ -37,7 +37,7 @@ class Pullkin(PullkinBase):
         return res
 
     def __send(self, s, packet):
-        logger.debug(f"Send")
+        logger.debug("Send")
         header = bytearray([self.MCS_VERSION, self.PACKET_BY_TAG.index(type(packet))])
         logger.debug(f"Packet:\n`{packet}`")
         payload = packet.SerializeToString()
@@ -52,7 +52,7 @@ class Pullkin(PullkinBase):
             total += sent
 
     def __recv(self, s, first=False):
-        logger.debug(f"Receive")
+        logger.debug("Receive")
         if first:
             version, tag = struct.unpack("BB", self.__read(s, 2))
             logger.debug(f"Version {version}")

@@ -37,5 +37,5 @@ setup(
     license="Mozilla Public License 2.0",
     classifiers=pullkin_classifiers,
     keywords="fcm gcm push notification receive firebase google",
-    install_requires=requirements()
+    install_requires=requirements(),
 )

@@ -12,11 +12,9 @@ from loguru import logger
 from oscrypto.asymmetric import generate_pair
 
 from pullkin.models.message import AppCredentials, AppCredentialsGcm
-from pullkin.proto.android_checkin_proto import (AndroidCheckinProto,
-                                                 ChromeBuildProto)
-from pullkin.proto.checkin_proto import (AndroidCheckinRequest,
-                                         AndroidCheckinResponse)
-from pullkin.proto.mcs_proto import *
+from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuildProto
+from pullkin.proto.checkin_proto import AndroidCheckinRequest, AndroidCheckinResponse
+from pullkin.proto.mcs_proto import *  # noqa: F403
 
 nest_asyncio.apply()
 logger.disable("pullkin")
@@ -93,7 +91,7 @@ class PullkinBase:
                 resp_data = resp.content
                 logger.debug(f"Response:\n{resp_data}")
                 return resp_data
-            except ValueError as e:
+            except ValueError:
                 ...
             except Exception as e:
                 logger.opt(exception=e).error("Error during request:")
@@ -132,7 +130,7 @@ class PullkinBase:
             url=self.CHECKIN_URL,
             headers={"Content-Type": "application/x-protobuf"},
             content=payload.SerializeToString(),
-            timeout=5
+            timeout=5,
         )
         resp_data = await self._do_request(req)
         resp = AndroidCheckinResponse()

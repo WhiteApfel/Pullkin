@@ -15,7 +15,7 @@ from loguru import logger
 
 from pullkin.client_base import PullkinBase
 from pullkin.models.message import Message
-from pullkin.proto.mcs_proto import *
+from pullkin.proto.mcs_proto import *  # noqa: F403
 
 logger.disable("pullkin")
 
@@ -99,7 +99,9 @@ class AioPullkin(PullkinBase):
                 print("=-)")
 
         """
-        self.on_notification_handlers.append({"callback": callback, "filter": handler_filter})
+        self.on_notification_handlers.append(
+            {"callback": callback, "filter": handler_filter}
+        )
 
     async def __run_on_notification_callbacks(self, obj, notification, data_message):
         x = 0
@@ -120,7 +122,7 @@ class AioPullkin(PullkinBase):
                     self.callback(obj, notification, data_message)
 
         if not x:
-            logger.debug('No one callback was called')
+            logger.debug("No one callback was called")
 
     async def aioregister(self, sender_id):
         """
@@ -159,7 +161,7 @@ class AioPullkin(PullkinBase):
         return res
 
     async def __aiosend(self, packet) -> None:
-        logger.debug(f"Send")
+        logger.debug("Send")
         header = bytearray([self.MCS_VERSION, self.PACKET_BY_TAG.index(type(packet))])
         logger.debug(f"Packet:\n'{packet}'")
         payload = packet.SerializeToString()
@@ -169,7 +171,7 @@ class AioPullkin(PullkinBase):
         await self.__writer.drain()
 
     async def __aiorecv(self, first=False) -> Optional[PullkinBase.packet_union]:
-        logger.debug(f"Receive")
+        logger.debug("Receive")
         if first:
             version, tag = struct.unpack("BB", await self.__aioread(2))
             logger.debug(f"Version {version}")
@@ -282,7 +284,7 @@ class AioPullkin(PullkinBase):
 
     async def _wait_start(self):
         while not all([self._started, self.__reader, self.__writer]):
-            await asyncio.sleep(.1)
+            await asyncio.sleep(0.1)
 
     async def _run_listener(self, timer: Union[int, float] = 0.05) -> None:
         if not (self.__reader or self.__writer):
@@ -294,7 +296,7 @@ class AioPullkin(PullkinBase):
             while self.__reader and self.__writer:
                 await coroutine.asend(None)
                 await asyncio.sleep(timer)
-        except Exception as e:
+        except Exception:
             print(traceback.format_exc())
         finally:
             if self.__writer:
@@ -315,7 +317,7 @@ class AioPullkin(PullkinBase):
         try:
             await asyncio.wait(self._wait_start(), timeout=10)
         except asyncio.exceptions.TimeoutError:
-            print('Timeout start listener 10s')
+            print("Timeout start listener 10s")
 
     async def close(self):
         try:

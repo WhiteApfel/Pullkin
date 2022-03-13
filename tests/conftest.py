@@ -10,7 +10,9 @@ class FirebaseAdmin:
         self.cred = credentials.Certificate(SERVICE_ACCOUNT_CRED)
         self.appfcm = firebase_admin.initialize_app(self.cred)
 
-    def send_notification(self, token: str, title: str, body: str, image: str = None, data: dict = None):
+    def send_notification(
+        self, token: str, title: str, body: str, image: str = None, data: dict = None
+    ):
         messaging.send(
             message=messaging.Message(
                 token=token,
@@ -24,6 +26,6 @@ class FirebaseAdmin:
         )
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 async def fcm(event_loop, monkeypatch):
     return FirebaseAdmin()

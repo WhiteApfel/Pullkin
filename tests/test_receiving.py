@@ -27,7 +27,7 @@ async def test_aio_receive(fcm: FirebaseAdmin):
 
     async def wait_notification():
         while not (message := await coroutine.asend(None)):
-            await asyncio.sleep(.5)
+            await asyncio.sleep(0.5)
         return message
 
     message: Message = await asyncio.wait_for(wait_notification(), timeout=10)
