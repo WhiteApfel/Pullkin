@@ -71,6 +71,7 @@ class PullkinBase:
 
     def __init__(self):
         self._http_client = None
+        self.credentials: AppCredentials = None
 
     @property
     def http_client(self):
@@ -243,6 +244,7 @@ class PullkinBase:
         Returns "app"-credential in dict for receive "personal" push by token
         """
         res = asyncio.get_event_loop().run_until_complete(self._register(sender_id))
+        self.credentials = AppCredentials(**res)
         return AppCredentials(**res)
 
     @classmethod

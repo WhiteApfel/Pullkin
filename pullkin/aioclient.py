@@ -25,7 +25,6 @@ class AioPullkin(PullkinBase):
         super().__init__()
         self.__reader: Optional[StreamReader] = None
         self.__writer: Optional[StreamWriter] = None
-        self.credentials: AppCredentials = {}
         self.persistent_ids: list = []
         self.callback: Callable = None
         self.on_notification_handlers: list = []
@@ -228,7 +227,7 @@ class AioPullkin(PullkinBase):
         notification = Message(json.loads(decrypted.decode("utf-8")))
         await self.__run_on_notification_callbacks({}, notification, p)
 
-    async def __aiolisten_start(self) -> None:
+    async def _aiolisten_start(self) -> None:
         await self.gcm_check_in(self.credentials.gcm)
         req = LoginRequest()
         req.adaptive_heartbeat = False
@@ -276,7 +275,7 @@ class AioPullkin(PullkinBase):
         """
         if not (self.__reader or self.__writer):
             await self.__open_connection()
-        await self.__aiolisten_start()
+        await self._aiolisten_start()
         coroutine = self.__aiolisten_coroutine()
         return coroutine
 
@@ -288,7 +287,7 @@ class AioPullkin(PullkinBase):
         if not (self.__reader or self.__writer):
             await self.__open_connection()
 
-        await self.__aiolisten_start()
+        await self._aiolisten_start()
         coroutine = self.__aiolisten_coroutine()
         try:
             while self.__reader and self.__writer:
