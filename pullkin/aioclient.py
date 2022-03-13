@@ -15,7 +15,7 @@ from loguru import logger
 
 from pullkin.client_base import PullkinBase
 from pullkin.proto.mcs_proto import *
-from pullkin.models.message import Message
+from pullkin.models.message import AppCredentials, Message
 
 logger.disable("pullkin")
 
@@ -25,7 +25,7 @@ class AioPullkin(PullkinBase):
         super().__init__()
         self.__reader: Optional[StreamReader] = None
         self.__writer: Optional[StreamWriter] = None
-        self.credentials: dict = {}
+        self.credentials: AppCredentials = {}
         self.persistent_ids: list = []
         self.callback: Callable = None
         self.on_notification_handlers: list = []
