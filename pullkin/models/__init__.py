@@ -1,1 +1,1 @@
-from pullkin.models.message import Message, NotificationData, AppCredentials
+from pullkin.models.message import AppCredentials, Message, NotificationData

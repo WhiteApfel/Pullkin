@@ -12,8 +12,10 @@ from loguru import logger
 from oscrypto.asymmetric import generate_pair
 
 from pullkin.models.message import AppCredentials, AppCredentialsGcm
-from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuildProto
-from pullkin.proto.checkin_proto import AndroidCheckinRequest, AndroidCheckinResponse
+from pullkin.proto.android_checkin_proto import (AndroidCheckinProto,
+                                                 ChromeBuildProto)
+from pullkin.proto.checkin_proto import (AndroidCheckinRequest,
+                                         AndroidCheckinResponse)
 from pullkin.proto.mcs_proto import *
 
 nest_asyncio.apply()

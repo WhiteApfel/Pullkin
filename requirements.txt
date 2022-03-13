@@ -1,9 +1,9 @@
-oscrypto~=1.2.1
 asyncio~=3.4.3
-cryptography==36.0.1
-loguru==0.6.0
 betterproto~=1.2.5
-httpx~=0.22.0
-nest_asyncio~=1.5.1
+cryptography==36.0.1
 http-ece~=1.1.0
+httpx~=0.22.0
+loguru==0.6.0
+nest_asyncio~=1.5.1
+oscrypto~=1.2.1
 python-dotenv~=0.19.2

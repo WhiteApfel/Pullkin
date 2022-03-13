@@ -6,7 +6,7 @@ import traceback
 from asyncio import StreamReader, StreamWriter
 from base64 import urlsafe_b64decode
 from binascii import hexlify
-from typing import Callable, Optional, Union, AsyncGenerator
+from typing import AsyncGenerator, Callable, Optional, Union
 
 import cryptography.hazmat.primitives.serialization as serialization
 import http_ece
@@ -14,8 +14,8 @@ from cryptography.hazmat.backends import default_backend
 from loguru import logger
 
 from pullkin.client_base import PullkinBase
+from pullkin.models.message import Message
 from pullkin.proto.mcs_proto import *
-from pullkin.models.message import AppCredentials, Message
 
 logger.disable("pullkin")
 
