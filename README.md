@@ -64,7 +64,7 @@ async def on_notification(obj, message: Message, data_message):
 
 
 async def main():
-    await pullkin.listen_forever()
+    await pullkin.run()
 
 
 asyncio.run(main())

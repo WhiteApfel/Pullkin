@@ -30,6 +30,7 @@ class AioPullkin(PullkinBase):
         self.callback: Callable = None
         self.on_notification_handlers: list = []
         self.once = True
+        self._started = False
 
     def on_notification(self, filter: Callable = lambda *a, **k: True):
         """
@@ -245,6 +246,7 @@ class AioPullkin(PullkinBase):
         req.received_persistent_id.extend(self.persistent_ids)
         await self.__aiosend(req)
         await self.__aiorecv(first=True)
+        self._started = True
 
     async def __aiolisten_coroutine(self) -> AsyncGenerator:
         while True:
@@ -279,15 +281,11 @@ class AioPullkin(PullkinBase):
         coroutine = self.__aiolisten_coroutine()
         return coroutine
 
-    async def listen_forever(self, timer: Union[int, float] = 0.05) -> None:
-        """
-        Listens for push notifications
+    async def _wait_start(self):
+        while not all([self._started, self.__reader, self.__writer]):
+            await asyncio.sleep(.1)
 
-        Runs an endless loop for reading notifications and distributing among callbacks based on filter results
-
-        :param timer: timer in seconds between receive iteration
-        :type timer: ``int`` or ``float``, optional, default ``0.05``
-        """
+    async def _run_listener(self, timer: Union[int, float] = 0.05) -> None:
         if not (self.__reader or self.__writer):
             await self.__open_connection()
 
@@ -303,6 +301,22 @@ class AioPullkin(PullkinBase):
             if self.__writer:
                 self.__writer.close()
                 await self.__writer.wait_closed()
+
+    async def run(self, timer: Union[int, float] = 0.05) -> None:
+        """
+        Listens for push notifications
+
+        Runs an endless loop for reading notifications and distributing among callbacks based on filter results
+
+        :param timer: timer in seconds between receive iteration
+        :type timer: ``int`` or ``float``, optional, default ``0.05``
+        """
+
+        asyncio.ensure_future(self._run_listener(timer))
+        try:
+            await asyncio.wait(self._wait_start(), timeout=10)
+        except asyncio.exceptions.TimeoutError:
+            print('Timeout start listener 10s')
 
     async def close(self):
         try:
