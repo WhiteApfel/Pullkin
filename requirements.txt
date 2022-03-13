@@ -6,3 +6,4 @@ betterproto~=1.2.5
 httpx~=0.22.0
 nest_asyncio~=1.5.1
 http-ece~=1.1.0
+python-dotenv~=0.19.2
