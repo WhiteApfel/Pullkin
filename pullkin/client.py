@@ -156,7 +156,8 @@ class Pullkin(PullkinBase):
         sock = socket.create_connection((self.PUSH_HOST, self.PUSH_PORT))
         s = ssl_ctx.wrap_socket(sock, server_hostname=host)
         logger.debug(
-            f"Connected to SSL socket {self.PUSH_HOST}:{self.PUSH_PORT} with default ssl_context"
+            f"Connected to SSL socket {self.PUSH_HOST}:{self.PUSH_PORT} with default"
+            " ssl_context"
         )
         self.__listen(
             s, credentials, callback, received_persistent_ids, obj, timer, is_alive

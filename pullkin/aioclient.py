@@ -140,7 +140,8 @@ class AioPullkin(PullkinBase):
             self.PUSH_HOST, self.PUSH_PORT, ssl=ssl_ctx
         )
         logger.debug(
-            f"Connected to SSL socket {self.PUSH_HOST}:{self.PUSH_PORT} with default ssl_context"
+            f"Connected to SSL socket {self.PUSH_HOST}:{self.PUSH_PORT} with default"
+            " ssl_context"
         )
 
     async def __aioread(self, size) -> bytes:
