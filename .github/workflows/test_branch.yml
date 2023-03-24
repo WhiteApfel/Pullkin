@@ -7,18 +7,17 @@ on:
     branches: [ master ]
 
 jobs:
-  build:
-
+  test:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: Firenza/secrets-to-env@v1.1.0
       with:
         secrets: ${{ toJSON(secrets) }}
         secret_filter_regex: FIREBASE_*
     - name: Set up Python 3.10
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: "3.10"
     - name: Install dependencies
@@ -35,6 +34,6 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       run: |
-        pytest
+        pytest --asyncio-mode=strict
     - name: pre-commit
       uses: pre-commit/action@v2.0.3

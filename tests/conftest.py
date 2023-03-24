@@ -1,5 +1,6 @@
 import firebase_admin
 import pytest
+import pytest_asyncio
 from firebase_admin import credentials, messaging
 
 from tests.testdata import SERVICE_ACCOUNT_CRED
@@ -26,6 +27,6 @@ class FirebaseAdmin:
         )
 
 
-@pytest.fixture(scope="function")
+@pytest_asyncio.fixture(scope="function")
 async def fcm(event_loop, monkeypatch):
     return FirebaseAdmin()
