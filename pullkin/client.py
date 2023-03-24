@@ -100,7 +100,7 @@ class Pullkin(PullkinBase):
         self.__recv(s, first=True)
         while is_alive:
             p = self.__recv(s)
-            if type(p) is not DataMessageStanza:
+            if not isinstance(p, DataMessageStanza):
                 continue
             crypto_key = self._app_data_by_key(p, "crypto-key")[3:]  # strip dh=
             salt = self._app_data_by_key(p, "encryption")[5:]  # strip salt=
