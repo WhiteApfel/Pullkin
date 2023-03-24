@@ -1,4 +1,4 @@
-name: Publish package to PyPI
+name: Publish a Python distribution to PyPI
 
 on:
   release:
@@ -7,25 +7,25 @@ on:
 jobs:
   build-n-publish:
     name: Build and publish package to PyPI
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
-      - name: Set up Python 3.8
+      - name: Set up Python 3.10
         uses: actions/setup-python@v1
         with:
-          python-version: 3.8
+          python-version: '3.10'
 
       - name: Install pypa/build
         run: >-
-          python3 -m pip install --user --upgrade setuptools wheel
+          python -m pip install --user --upgrade setuptools wheel
 
       - name: Build a binary wheel and a source tarball
         env:
           TAG_VERSION: ${{ github.event.release.tag_name }}
         run: >-
-          python3 setup.py sdist bdist_wheel
+          python setup.py sdist bdist_wheel
 
-      - name: Publish package to PyPI
-        uses: pypa/gh-action-pypi-publish@master
+      - name: Publish a Python distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
