@@ -109,7 +109,7 @@ class PullkinBase:
         """
         chrome = ChromeBuildProto()
         chrome.platform = 3
-        chrome.chrome_version = "63.0.3234.0"
+        chrome.chrome_version = "111.0.5563.0"
         chrome.channel = 1
 
         checkin = AndroidCheckinProto()
@@ -149,7 +149,7 @@ class PullkinBase:
         res = urlsafe_b64encode(data).replace(b"=", b"")
         return res.replace(b"\n", b"").decode("ascii")
 
-    async def gcm_register(self, app_id, retries=5, **_):
+    async def gcm_register(self, app_id: str, app_name: str, retries=5, **_):
         """
         obtains a gcm token
 
@@ -163,7 +163,7 @@ class PullkinBase:
         chk = await self.gcm_check_in()
         logger.debug(f"Check_in:\n{chk}")
         body = {
-            "app": "org.chromium.linux",
+            "app": app_name,
             "X-subtype": app_id,
             "device": chk["androidId"],
             "sender": self.urlsafe_base64(self.SERVER_KEY),
@@ -226,9 +226,14 @@ class PullkinBase:
         resp_data = await self._do_request(req, retries)
         return {"keys": keys, "fcm": json.loads(resp_data.decode("utf-8"))}
 
-    async def register(self, sender_id: Union[str, int], app_id: str) -> AppCredentials:
+    async def register(
+        self,
+        sender_id: Union[str, int],
+        app_id: str,
+        app_name: str = "org.chromium.linux",
+    ) -> AppCredentials:
         """register gcm and fcm tokens for sender_id"""
-        subscription = await self.gcm_register(app_id=app_id)
+        subscription = await self.gcm_register(app_id=app_id, app_name=app_name)
         logger.debug(f"GCM subscription data: {subscription}")
         fcm = await self.fcm_register(sender_id=sender_id, token=subscription["token"])
         logger.debug(f"FCM subscription data: {fcm}")
