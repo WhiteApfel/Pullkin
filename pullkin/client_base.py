@@ -236,7 +236,7 @@ class PullkinBase:
         res.update(fcm)
 
         self.credentials = AppCredentials(**res)
-        return AppCredentials(**res)
+        return self.credentials
 
     @classmethod
     def _encode_varint32(cls, x):

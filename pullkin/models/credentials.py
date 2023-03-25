@@ -30,9 +30,12 @@ class AppCredentials:
     keys: Union[AppCredentialsKeys, dict]
 
     def __post_init__(self):
-        self.gcm: AppCredentialsGcm = AppCredentialsGcm(**self.gcm)  # type: ignore
-        self.fcm: AppCredentialsFcm = AppCredentialsFcm(**self.fcm)  # type: ignore
-        self.keys: AppCredentialsKeys = AppCredentialsKeys(**self.keys)  # type: ignore
+        if isinstance(self.gcm, dict):
+            self.gcm: AppCredentialsGcm = AppCredentialsGcm(**self.gcm)  # type: ignore
+        if isinstance(self.fcm, dict):
+            self.fcm: AppCredentialsFcm = AppCredentialsFcm(**self.fcm)  # type: ignore
+        if isinstance(self.keys, dict):
+            self.keys: AppCredentialsKeys = AppCredentialsKeys(**self.keys)  # type: ignore
 
     def __dict__(self):
         return asdict(self)
