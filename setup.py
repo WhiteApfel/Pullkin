@@ -5,11 +5,10 @@ from setuptools import find_packages, setup
 
 pullkin_classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.6",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: Implementation :: PyPy",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Libraries",
@@ -31,7 +30,7 @@ setup(
     author_email="white@pfel.ru",
     url="https://github.com/WhiteApfel/pullkin",
     packages=find_packages("."),
-    description="Like Pushkin, but subscribe to GCM/FCM and receive notifications",
+    description="Subscribe to GCM/FCM and receive notifications like an android app",
     long_description=push_receiver_readme,
     long_description_content_type="text/markdown",
     license="Mozilla Public License 2.0",

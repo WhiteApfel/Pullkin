@@ -1,5 +1,4 @@
 import firebase_admin
-import pytest
 import pytest_asyncio
 from firebase_admin import credentials, messaging
 
@@ -9,7 +8,7 @@ from tests.testdata import SERVICE_ACCOUNT_CRED
 class FirebaseAdmin:
     def __init__(self):
         self.cred = credentials.Certificate(SERVICE_ACCOUNT_CRED)
-        self.appfcm = firebase_admin.initialize_app(self.cred)
+        self.app_fcm = firebase_admin.initialize_app(self.cred)
 
     def send_notification(
         self, token: str, title: str, body: str, image: str = None, data: dict = None

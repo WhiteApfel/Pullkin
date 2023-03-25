@@ -14,7 +14,9 @@ class NotificationData:
                 self.__setattr__(k, v)
 
     def __str__(self):
-        return str(self.__dict__)
+        export = self.__dict__.copy()
+        del export["raw_data"]
+        return str(export)
 
 
 class Message:
@@ -36,4 +38,6 @@ class Message:
         return self.raw_data[item]
 
     def __str__(self):
-        return str(self.__dict__)
+        export = self.__dict__.copy()
+        del export["raw_data"]
+        return str(export)

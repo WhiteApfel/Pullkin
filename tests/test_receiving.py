@@ -3,20 +3,23 @@ from uuid import uuid4
 
 import pytest
 
-from pullkin import AioPullkin
+from pullkin import Pullkin
 from pullkin.models import Message
 from tests.conftest import FirebaseAdmin
-from tests.testdata import SENDER_ID
+from tests.testdata import APP_ID, SENDER_ID
 
 
 @pytest.mark.asyncio
 async def test_aio_receive(fcm: FirebaseAdmin):
-    client = AioPullkin()
-    fcm_cred = client.register(SENDER_ID)
+    client = Pullkin()
+    fcm_cred = await client.register(
+        SENDER_ID,
+        APP_ID,
+    )
 
     @client.on_notification()
-    def on_notification(obj, notification: Message, data_message):
-        print(notification)
+    def on_notification(message: Message, data_message):
+        print(message)
 
     coroutine = await client.listen_coroutine()
 

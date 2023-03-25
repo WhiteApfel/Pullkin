@@ -44,22 +44,23 @@ import json
 import os.path
 import asyncio
 
-from pullkin import AioPullkin
+from pullkin import Pullkin
 from pullkin.models import Message, AppCredentials
 
 SENDER_ID = '<<SENDER_ID>>'
-pullkin = AioPullkin()
+APP_ID = '<<APP_ID>>'
+pullkin = Pullkin()
 
 if not os.path.exists('.persistent_ids.txt'):
-        with open('.persistent_ids.txt', 'w+') as f:
-            ...
+    with open('.persistent_ids.txt', 'w+') as f:
+        ...
 
 with open(".persistent_ids.txt", "r") as f:
     received_persistent_ids = [x.strip() for x in f]
 
 
 @pullkin.on_notification()
-async def on_notification(obj, message: Message, data_message):
+async def on_notification(message: Message, data_message):
     idstr = data_message.persistent_id + "\n"
     with open(".persistent_ids.txt", "r") as f:
         if idstr in f:
@@ -72,7 +73,7 @@ async def on_notification(obj, message: Message, data_message):
 async def main():
     if not os.path.exists('.pullkin_app_credentials'):
         with open('.pullkin_app_credentials', 'w+') as f:
-            credentials = pullkin.register(SENDER_ID)
+            credentials = await pullkin.register(SENDER_ID, APP_ID)
             f.write(json.dumps(credentials.dict()))
     else:
         with open('.pullkin_app_credentials', 'r') as f:

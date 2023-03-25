@@ -1,4 +1,4 @@
-firebase_admin~=5.2.0
+firebase_admin==6.1.0
 pytest>=6.2.5
 pytest-asyncio>=0.16.0
-setuptools>=59.2.0
+setuptools==67.6.0
