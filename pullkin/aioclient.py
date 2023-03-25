@@ -1,12 +1,13 @@
 import asyncio
 import inspect
 import json
+import ssl
 import struct
-import traceback
+import uuid
 from asyncio import StreamReader, StreamWriter
 from base64 import urlsafe_b64decode
 from binascii import hexlify
-from typing import AsyncGenerator, Callable, Optional, Union
+from typing import AsyncGenerator, Awaitable, Callable, Optional, Union
 
 import cryptography.hazmat.primitives.serialization as serialization
 import http_ece
@@ -20,18 +21,25 @@ from pullkin.proto.mcs_proto import *  # noqa: F403
 logger.disable("pullkin")
 
 
-class AioPullkin(PullkinBase):
+class Pullkin(PullkinBase):
     def __init__(self):
         super().__init__()
         self.__reader: Optional[StreamReader] = None
         self.__writer: Optional[StreamWriter] = None
         self.persistent_ids: list = []
-        self.callback: Callable = None
+        self.callback: Optional[
+            Callable[[Message, DataMessageStanza], Optional[Awaitable]]
+        ] = None
         self.on_notification_handlers: list = []
-        self.once = True
-        self._started = False
+        self.once: bool = True
+        self._started: bool = False
 
-    def on_notification(self, handler_filter: Callable = lambda *a, **k: True):
+    def on_notification(
+        self,
+        handler_filter: Callable[
+            [Message, DataMessageStanza], None
+        ] = lambda *a, **k: True,
+    ):
         """
         Decorator
 
@@ -43,23 +51,25 @@ class AioPullkin(PullkinBase):
         Third param: Message object that get from socket. With all data about message. Read hereL TODO: add a link
 
         :: python code
-            from pullkin import AioPullkin, Notification, DataMessageStanza as Message
+            from pullkin import Pullkin, Message, DataMessageStanza
             pullkin = AuiPullkin()
 
-            @pullkin.on_notification(lambda o, n, m: n.title == "Moi koleni zamerzli")
-            def on_zemfira(obj, notification, message):
-                print(notification.notification.body)
+            @pullkin.on_notification(lambda m, d: m.notification.title == "Moi koleni zamerzli")
+            def on_zemfira(message: Message, data_message: DataMessageStanza):
+                print(message.notification.body)
 
-            @pullkin.on_notification(lambda o, n, m: n.priority == "normal")
-            async def on_normal(obj: dict, notification: Notification, message: Message):
-                print(f"#{message.id} @{message.sent})
-                print(notification")
+            @pullkin.on_notification(lambda m, d: m.priority == "normal")
+            async def on_normal(message: Message, data_message: DataMessageStanza):
+                print(f"#{data_message.id} @{data_message.sent}")
+                print(message.notification)
                 await asyncio.sleep(2)
                 print("=-)")
 
         """
 
-        def decorator(callback):
+        def decorator(
+            callback: Callable[[Message, DataMessageStanza], Optional[Awaitable]]
+        ):
             self.on_notification_handlers.append(
                 {"callback": callback, "filter": handler_filter}
             )
@@ -68,8 +78,10 @@ class AioPullkin(PullkinBase):
         return decorator
 
     def register_on_notification_handler(
-        self, handler_filter: Callable = None, callback: Callable = None
-    ):
+        self,
+        handler_filter: Callable[[Message, DataMessageStanza], bool] = None,
+        callback: Callable[[Message, DataMessageStanza], Optional[Awaitable]] = None,
+    ) -> None:
         """
         Function
 
@@ -84,7 +96,7 @@ class AioPullkin(PullkinBase):
         Third param: Message object that get from socket. With all data about message. Read hereL TODO: add a link
 
         :: python code
-            from pullkin import AioPullkin, Notification, DataMessageStanza as Message
+            from pullkin import Pullkin, Notification, DataMessageStanza as Message
             pullkin = AuiPullkin()
 
             @pullkin.on_notification(lambda o, n, m: n.title == "Moi koleni zamerzli")
@@ -103,34 +115,28 @@ class AioPullkin(PullkinBase):
             {"callback": callback, "filter": handler_filter}
         )
 
-    async def __run_on_notification_callbacks(self, obj, notification, data_message):
+    async def __run_on_notification_callbacks(
+        self, message: Message, data_message: DataMessageStanza
+    ) -> None:
         x = 0
         for handler in self.on_notification_handlers:
-            if handler["filter"](obj, notification, data_message):
+            if handler["filter"](message, data_message):
                 if inspect.iscoroutinefunction(handler["callback"]):
-                    await handler["callback"](obj, notification, data_message)
+                    await handler["callback"](message, data_message)
                 else:
-                    handler["callback"](obj, notification, data_message)
+                    handler["callback"](message, data_message)
                 x += 1
                 if self.once:
                     break
         else:
-            if self.callback:
+            if self.callback is not None:
                 if inspect.iscoroutinefunction(self.callback):
-                    await self.callback(obj, notification, data_message)
+                    await self.callback(message, data_message)
                 else:
-                    self.callback(obj, notification, data_message)
+                    self.callback(message, data_message)
 
         if not x:
             logger.debug("No one callback was called")
-
-    async def aioregister(self, sender_id):
-        """
-        Async version. Register "app" for receive pushed
-
-        Returns "app"-credential in dict for receive "personal" push by token
-        """
-        return await self._register(sender_id)
 
     async def __open_connection(self) -> None:
         import ssl
@@ -144,62 +150,63 @@ class AioPullkin(PullkinBase):
             " ssl_context"
         )
 
-    async def __aioread(self, size) -> bytes:
+    async def __read(self, size) -> bytes:
         buf = b""
         while len(buf) < size:
             buf += await self.__reader.read(size - len(buf))
         return buf
 
-    async def __aioread_varint32(self) -> int:
+    async def __read_varint32(self) -> int:
         res = 0
         shift = 0
         while True:
-            (b,) = struct.unpack("B", await self.__aioread(1))
+            (b,) = struct.unpack("B", await self.__read(1))
             res |= (b & 0x7F) << shift
             if (b & 0x80) == 0:
                 break
             shift += 7
         return res
 
-    async def __aiosend(self, packet) -> None:
-        logger.debug("Send")
+    async def __send(self, packet) -> None:
+        logger.debug(f"Send #{(send_id := str(uuid.uuid4()))}")
         header = bytearray([self.MCS_VERSION, self.PACKET_BY_TAG.index(type(packet))])
-        logger.debug(f"Packet:\n'{packet}'")
+        logger.debug(f"Packet:\n'{packet}' #{send_id}")
         payload = packet.SerializeToString()
         buf = bytes(header) + self._encode_varint32(len(payload)) + payload
-        logger.debug(f"HEX buffer:\n`{hexlify(buf)}`")
+        logger.debug(f"HEX buffer:\n`{hexlify(buf)}` #{send_id}")
         self.__writer.write(buf)
         await self.__writer.drain()
 
-    async def __aiorecv(self, first=False) -> Optional[PullkinBase.packet_union]:
-        logger.debug("Receive")
+    async def __recv(self, first=False) -> Optional[PullkinBase.packet_union]:
+        logger.debug(f"Receive #{(recv_id := str(uuid.uuid4()))}")
         if first:
-            version, tag = struct.unpack("BB", await self.__aioread(2))
+            version, tag = struct.unpack("BB", await self.__read(2))
             logger.debug(f"Version {version}")
             if version < self.MCS_VERSION and version != 38:
+                logger.error(f"Protocol version {version} unsupported")
                 raise RuntimeError(f"Protocol version {version} unsupported")
         else:
-            (tag,) = struct.unpack("B", await self.__aioread(1))
-        logger.debug(f"Tag {tag} ({self.PACKET_BY_TAG[tag]})")
-        size = await self.__aioread_varint32()
-        logger.debug(f"Size {size}")
+            (tag,) = struct.unpack("B", await self.__read(1))
+        logger.debug(f"Tag {tag} ({self.PACKET_BY_TAG[tag]}) #{recv_id}")
+        size = await self.__read_varint32()
+        logger.debug(f"Size {size} #{recv_id}")
         if size >= 0:
-            buf = await self.__aioread(size)
-            logger.debug(f"HEX buffer:\n`{hexlify(buf)}`")
+            buf = await self.__read(size)
+            logger.debug(f"HEX buffer:\n`{hexlify(buf)}` #{recv_id}")
             packet_class = self.PACKET_BY_TAG[tag]
             payload = packet_class()
             payload.parse(buf)
-            logger.debug(f"Payload:\n`{payload}`")
+            logger.debug(f"Payload:\n`{payload}` #{recv_id}")
             return payload
         return None
 
-    async def __aiolisten_once(
+    async def __listen_once(
         self,
-    ) -> Message:
+    ) -> Optional[Message]:
         load_der_private_key = serialization.load_der_private_key
 
-        p = await self.__aiorecv()
-        if type(p) is not DataMessageStanza:
+        p = await self.__recv()
+        if not isinstance(p, DataMessageStanza):
             return
         if self._is_deleted_message(p):
             return
@@ -220,24 +227,24 @@ class AioPullkin(PullkinBase):
             der_data, password=None, backend=default_backend()
         )
         decrypted = http_ece.decrypt(
-            p.raw_data,
-            salt=salt,
-            private_key=privkey,
-            dh=crypto_key,
+            p.raw_data,  # noqa
+            salt=salt,  # noqa
+            private_key=privkey,  # noqa
+            dh=crypto_key,  # noqa
             version="aesgcm",
-            auth_secret=secret,
+            auth_secret=secret,  # noqa
         )
-        notification = Message(json.loads(decrypted.decode("utf-8")))
-        await self.__run_on_notification_callbacks({}, notification, p)
-        return notification
+        message = Message(json.loads(decrypted.decode("utf-8")))
+        await self.__run_on_notification_callbacks(message, p)
+        return message
 
-    async def _aiolisten_start(self) -> None:
+    async def _listen_start(self) -> None:
         await self.gcm_check_in(self.credentials.gcm)
         req = LoginRequest()
         req.adaptive_heartbeat = False
         req.auth_service = 2
         req.auth_token = self.credentials.gcm.securityToken
-        req.id = "chrome-91.0.3234.0"
+        req.id = "chrome-111.0.5563.0"
         req.domain = "mcs.android.com"
         req.device_id = "android-%x" % int(self.credentials.gcm.androidId)
         req.network_type = 1
@@ -246,13 +253,15 @@ class AioPullkin(PullkinBase):
         req.use_rmq2 = True
         req.setting.append(Setting(name="new_vc", value="1"))
         req.received_persistent_id.extend(self.persistent_ids)
-        await self.__aiosend(req)
-        await self.__aiorecv(first=True)
+        await self.__send(req)
+        await self.__recv(first=True)
         self._started = True
 
-    async def __aiolisten_coroutine(self) -> AsyncGenerator:
+    async def __listen_coroutine(self) -> AsyncGenerator:
         while True:
-            yield await self.__aiolisten_once()
+            yield await self.__listen_once()
+            if not self._started:
+                return
 
     async def listen_coroutine(self) -> AsyncGenerator:
         """
@@ -279,30 +288,31 @@ class AioPullkin(PullkinBase):
         """
         if not (self.__reader or self.__writer):
             await self.__open_connection()
-        await self._aiolisten_start()
-        coroutine = self.__aiolisten_coroutine()
+        await self._listen_start()
+        coroutine = self.__listen_coroutine()
         return coroutine
 
     async def _wait_start(self):
         while not all([self._started, self.__reader, self.__writer]):
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.01)
 
     async def _run_listener(self, timer: Union[int, float] = 0.05) -> None:
         if not (self.__reader or self.__writer):
             await self.__open_connection()
 
-        await self._aiolisten_start()
-        coroutine = self.__aiolisten_coroutine()
+        await self._listen_start()
+        coroutine = self.__listen_coroutine()
         try:
             while self.__reader and self.__writer:
                 await coroutine.asend(None)
                 await asyncio.sleep(timer)
-        except Exception:
-            print(traceback.format_exc())
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            ...
+        except:  # noqa: E722
+            logger.exception("Error while listen:")
+            raise
         finally:
-            if self.__writer:
-                self.__writer.close()
-                await self.__writer.wait_closed()
+            await self.close()
 
     async def run(self, timer: Union[int, float] = 0.05) -> None:
         """
@@ -314,11 +324,16 @@ class AioPullkin(PullkinBase):
         :type timer: ``int`` or ``float``, optional, default ``0.05``
         """
 
-        asyncio.ensure_future(self._run_listener(timer))
+        asyncio.create_task(self._run_listener(timer))
         try:
-            await asyncio.wait(self._wait_start(), timeout=10)
+            await asyncio.wait_for(self._wait_start(), timeout=10)
         except asyncio.exceptions.TimeoutError:
-            print("Timeout start listener 10s")
+            logger.error("Timeout start listener 10s")
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            return
+        except:  # noqa: E722
+            logger.exception("Wait start error:")
+            raise
 
     async def close(self):
         try:
@@ -330,7 +345,13 @@ class AioPullkin(PullkinBase):
                 await asyncio.wait_for(self.__writer.wait_closed(), 5)
             self.__writer = None
             self.__reader = None
+            self._started = False
         except asyncio.exceptions.TimeoutError:
             return
         except ConnectionResetError:
             return
+        except ssl.SSLError:
+            ...
+        except:  # noqa: E722
+            logger.exception("Error during close Pullkin:")
+            raise

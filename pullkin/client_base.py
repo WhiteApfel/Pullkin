@@ -6,7 +6,6 @@ from base64 import urlsafe_b64encode
 from typing import Optional, Union
 from urllib.parse import urlencode
 
-import nest_asyncio
 from httpx import AsyncClient, Request
 from loguru import logger
 from oscrypto.asymmetric import generate_pair
@@ -16,7 +15,6 @@ from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuild
 from pullkin.proto.checkin_proto import AndroidCheckinRequest, AndroidCheckinResponse
 from pullkin.proto.mcs_proto import *  # noqa: F403
 
-nest_asyncio.apply()
 logger.disable("pullkin")
 
 
@@ -71,7 +69,7 @@ class PullkinBase:
 
     def __init__(self):
         self._http_client = None
-        self.credentials: AppCredentials = None
+        self.credentials: Optional[AppCredentials] = None
 
     @property
     def http_client(self):
@@ -92,11 +90,13 @@ class PullkinBase:
                 logger.debug(f"Response:\n{resp_data}")
                 return resp_data
             except ValueError:
-                ...
-            except Exception as e:
-                logger.opt(exception=e).error("Error during request:")
+                logger.exception("ValueError during send request")
+            except (KeyboardInterrupt, asyncio.CancelledError):
+                raise
+            except:  # noqa
+                logger.exception("Error during request:")
                 time.sleep(1)
-        raise ConnectionError(f"Error during request: {e}")
+        raise ValueError(f"Failed to get a response with {retries} retries")
 
     async def gcm_check_in(self, credentials: Optional[AppCredentialsGcm] = None):
         """
@@ -149,7 +149,7 @@ class PullkinBase:
         res = urlsafe_b64encode(data).replace(b"=", b"")
         return res.replace(b"\n", b"").decode("ascii")
 
-    async def gcm_register(self, appId, retries=5, **_):
+    async def gcm_register(self, app_id, retries=5, **_):
         """
         obtains a gcm token
 
@@ -164,7 +164,7 @@ class PullkinBase:
         logger.debug(f"Check_in:\n{chk}")
         body = {
             "app": "org.chromium.linux",
-            "X-subtype": appId,
+            "X-subtype": app_id,
             "device": chk["androidId"],
             "sender": self.urlsafe_base64(self.SERVER_KEY),
         }
@@ -185,10 +185,10 @@ class PullkinBase:
                 continue
             token = resp_data.decode("utf-8").split("=")[1]
             chkfields = {k: chk[k] for k in ["androidId", "securityToken"]}
-            res = {"token": token, "appId": appId}
+            res = {"token": token, "appId": app_id}
             res.update(chkfields)
             return res
-        return None
+        raise ValueError("Register error")
 
     async def fcm_register(self, sender_id: Union[str, int], token, retries=5):
         """
@@ -226,24 +226,15 @@ class PullkinBase:
         resp_data = await self._do_request(req, retries)
         return {"keys": keys, "fcm": json.loads(resp_data.decode("utf-8"))}
 
-    async def _register(self, sender_id: Union[str, int]):
+    async def register(self, sender_id: Union[str, int], app_id: str) -> AppCredentials:
         """register gcm and fcm tokens for sender_id"""
-        app_id = "1:302251869498:android:90c5cd74bae68792813c03"
-        subscription = await self.gcm_register(appId=app_id)
+        subscription = await self.gcm_register(app_id=app_id)
         logger.debug(f"GCM subscription data: {subscription}")
         fcm = await self.fcm_register(sender_id=sender_id, token=subscription["token"])
         logger.debug(f"FCM subscription data: {fcm}")
         res = {"gcm": subscription}
         res.update(fcm)
-        return res
 
-    def register(self, sender_id: Union[str, int]):
-        """
-        Sync version. Register "app" for receive pushed
-
-        Returns "app"-credential in dict for receive "personal" push by token
-        """
-        res = asyncio.get_event_loop().run_until_complete(self._register(sender_id))
         self.credentials = AppCredentials(**res)
         return AppCredentials(**res)
 
