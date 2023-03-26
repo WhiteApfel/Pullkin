@@ -28,7 +28,7 @@ class Pullkin(PullkinBase):
         self.__writer: Optional[StreamWriter] = None
         self.persistent_ids: list = []
         self.callback: Optional[
-            Callable[[Message, DataMessageStanza], Optional[Awaitable]]
+            Callable[[Optional[Message], DataMessageStanza], Optional[Awaitable]]
         ] = None
         self.on_notification_handlers: list = []
         self.once: bool = True
@@ -68,7 +68,7 @@ class Pullkin(PullkinBase):
         """
 
         def decorator(
-            callback: Callable[[Message, DataMessageStanza], Optional[Awaitable]]
+            callback: Callable[[Optional[Message], DataMessageStanza], Optional[Awaitable]]
         ):
             self.on_notification_handlers.append(
                 {"callback": callback, "filter": handler_filter}
@@ -79,8 +79,8 @@ class Pullkin(PullkinBase):
 
     def register_on_notification_handler(
         self,
-        handler_filter: Callable[[Message, DataMessageStanza], bool] = None,
-        callback: Callable[[Message, DataMessageStanza], Optional[Awaitable]] = None,
+        handler_filter: Callable[[Optional[Message], DataMessageStanza], bool] = None,
+        callback: Callable[[Optional[Message], DataMessageStanza], Optional[Awaitable]] = None,
     ) -> None:
         """
         Function
@@ -210,31 +210,33 @@ class Pullkin(PullkinBase):
             return
         if self._is_deleted_message(p):
             return
+        p: DataMessageStanza
         crypto_key = self._app_data_by_key(p, "crypto-key", False)
         salt = self._app_data_by_key(p, "encryption", False)
         logger.debug(f"crypto-key: {crypto_key}, salt: {salt}")
         if not (salt and crypto_key):
-            return
-        crypto_key = crypto_key[3:]  # strip dh=
-        salt = salt[5:]  # strip salt=
-        crypto_key = urlsafe_b64decode(crypto_key.encode("ascii"))
-        salt = urlsafe_b64decode(salt.encode("ascii"))
-        der_data = self.credentials.keys.private
-        der_data = urlsafe_b64decode(der_data.encode("ascii") + b"========")
-        secret = self.credentials.keys.secret
-        secret = urlsafe_b64decode(secret.encode("ascii") + b"========")
-        privkey = load_der_private_key(
-            der_data, password=None, backend=default_backend()
-        )
-        decrypted = http_ece.decrypt(
-            p.raw_data,  # noqa
-            salt=salt,  # noqa
-            private_key=privkey,  # noqa
-            dh=crypto_key,  # noqa
-            version="aesgcm",
-            auth_secret=secret,  # noqa
-        )
-        message = Message(json.loads(decrypted.decode("utf-8")))
+            message = None
+        else:
+            crypto_key = crypto_key[3:]  # strip dh=
+            salt = salt[5:]  # strip salt=
+            crypto_key = urlsafe_b64decode(crypto_key.encode("ascii"))
+            salt = urlsafe_b64decode(salt.encode("ascii"))
+            der_data = self.credentials.keys.private
+            der_data = urlsafe_b64decode(der_data.encode("ascii") + b"========")
+            secret = self.credentials.keys.secret
+            secret = urlsafe_b64decode(secret.encode("ascii") + b"========")
+            privkey = load_der_private_key(
+                der_data, password=None, backend=default_backend()
+            )
+            decrypted = http_ece.decrypt(
+                p.raw_data,  # noqa
+                salt=salt,  # noqa
+                private_key=privkey,  # noqa
+                dh=crypto_key,  # noqa
+                version="aesgcm",
+                auth_secret=secret,  # noqa
+            )
+            message = Message(json.loads(decrypted.decode("utf-8")))
         await self.__run_on_notification_callbacks(message, p)
         return message
 
