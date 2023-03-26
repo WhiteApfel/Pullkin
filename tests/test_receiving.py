@@ -6,15 +6,21 @@ import pytest
 from pullkin import Pullkin
 from pullkin.models import Message
 from tests.conftest import FirebaseAdmin
-from tests.testdata import APP_ID, SENDER_ID
+from tests.testdata import (
+    ANDROID_CERT,
+    API_KEY,
+    APP_ID,
+    APP_NAME,
+    FIREBASE_NAME,
+    SENDER_ID,
+)
 
 
 @pytest.mark.asyncio
 async def test_aio_receive(fcm: FirebaseAdmin):
     client = Pullkin()
     fcm_cred = await client.register(
-        SENDER_ID,
-        APP_ID,
+        SENDER_ID, APP_ID, API_KEY, ANDROID_CERT, FIREBASE_NAME, APP_NAME
     )
 
     @client.on_notification()
