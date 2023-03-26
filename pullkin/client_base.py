@@ -14,6 +14,7 @@ from loguru import logger
 from oscrypto.asymmetric import generate_pair
 
 from pullkin.models import AppCredentials, AppCredentialsGcm
+from pullkin.models.credentials import FirebaseInstallationResponse
 from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuildProto
 from pullkin.proto.checkin_proto import AndroidCheckinRequest, AndroidCheckinResponse
 from pullkin.proto.mcs_proto import *  # noqa: F403
@@ -124,11 +125,11 @@ class PullkinBase:
         android_cert: str,
         app_package: str,
         firebase_name: str,
-    ):
+    ) -> FirebaseInstallationResponse:
         data = {
             "fid": self.generate_fid(),
             "authVersion": "FIS_v2",
-            "appId": app_id,
+            "app_id": app_id,
             "sdkVersion": "a:17.1.0",
         }
         headers = {
@@ -146,16 +147,26 @@ class PullkinBase:
         )
         resp = await self._do_request(req)
 
-        return json.loads(resp.decode("utf-8"))
+        resp_data = json.loads(resp.decode("utf-8"))
 
-    async def gcm_check_in(self, credentials: Optional[AppCredentialsGcm] = None):
+        return FirebaseInstallationResponse(
+            name=resp_data["name"],
+            fid=resp_data["fid"],
+            refresh_token=resp_data["refreshToken"],
+            auth_token=resp_data["authToken"]["token"],
+            auth_token_expires_in=int(resp_data["authToken"]["expiresIn"][:-1]),
+        )
+
+    async def gcm_check_in(
+        self, credentials: Optional[AppCredentialsGcm] = None
+    ) -> AndroidCheckinResponse:
         """
         perform check-in request
 
-        androidId, securityToken can be provided if we already did the initial
+        android_id, security_token can be provided if we already did the initial
         check-in
 
-        returns dict with androidId, securityToken and more
+        returns dict with android_id, security_token and more
         """
         chrome = ChromeBuildProto()
         chrome.platform = 3
@@ -171,8 +182,8 @@ class PullkinBase:
         payload.checkin.from_dict(checkin.to_dict())
         payload.version = 3
         if credentials:
-            payload.id = int(credentials.androidId)
-            payload.security_token = int(credentials.securityToken)
+            payload.id = int(credentials.android_id)
+            payload.security_token = int(credentials.security_token)
 
         logger.debug(f"Payload:\n{payload}")
         req = self.http_client.build_request(
@@ -186,7 +197,7 @@ class PullkinBase:
         resp = AndroidCheckinResponse()
         resp.parse(resp_data)
         logger.debug(f"Response:\n{resp}")
-        return resp.to_dict()
+        return resp
 
     @classmethod
     def urlsafe_base64(cls, data):
@@ -213,18 +224,18 @@ class PullkinBase:
         """
         obtains a gcm token
 
-        appId: app id as an integer
+        app_id: app id as an integer
         retries: number of failed requests before giving up
 
-        returns {"token": "...", "appId": 123123, "androidId":123123,
-                 "securityToken": 123123}
+        returns {"token": "...", "app_id": 123123, "android_id":123123,
+                 "security_token": 123123}
         """
-        # contains androidId, securityToken and more
-        chk = await self.gcm_check_in()
-        fcm = await self.fcm_installation(
+        # contains android_id, security_token and more
+        checkin_result = await self.gcm_check_in()
+        installation_result = await self.fcm_installation(
             app_id, api_key, android_cert, app_name, firebase_name
         )
-        logger.debug(f"Check_in:\n{chk}")
+        logger.debug(f"Check_in:\n{checkin_result}")
         body = {
             "X-subtype": sender_id,
             "sender": sender_id,
@@ -232,9 +243,9 @@ class PullkinBase:
             "X-osv": "25",
             "X-cliv": "fcm-23.1.1",
             "X-gmsv": "231114044",
-            "X-appid": fcm["fid"],
+            "X-appid": installation_result.fid,
             "X-scope": "*",
-            "X-Goog-Firebase-Installations-Auth": fcm["authToken"]["token"],
+            "X-Goog-Firebase-Installations-Auth": installation_result.auth_token,
             "X-gmp_app_id": app_id,
             "X-firebase-app-name-hash": (
                 base64.b64encode(hashlib.sha1(app_name.encode()).digest())
@@ -243,7 +254,7 @@ class PullkinBase:
             ),
             "X-app_ver_name": "1.1.1.1",
             "app": app_name,
-            "device": chk["androidId"],
+            "device": checkin_result.android_id,
             "app_ver": "1111",
             "gcm_ver": "231114044",
             "plat": "0",
@@ -256,7 +267,9 @@ class PullkinBase:
             "app_ver": "111",
             "gcm_ver": "231114044",
             "user-agent": "Android-GCM/1.5 (Pullkin WhiteApfel)",
-            "authorization": f"AidLogin {chk['androidId']}:{chk['securityToken']}",
+            "authorization": (
+                f"AidLogin {checkin_result.android_id}:{checkin_result.security_token}"
+            ),
         }
 
         logger.debug(f"Data:\n{urlencode(body)}")
@@ -268,15 +281,24 @@ class PullkinBase:
         )
         for _ in range(retries):
             resp_data = await self._do_request(req, retries)
+
             if b"Error" in resp_data:
                 err = resp_data.decode("utf-8")
                 logger.error(f"Register request has failed with {err}")
                 continue
             token = resp_data.decode("utf-8").split("=")[1]
-            chkfields = {k: chk[k] for k in ["androidId", "securityToken"]}
-            res = {"token": token, "appId": app_id}
-            res.update(chkfields)
-            return res
+
+            gcm_credentials = AppCredentialsGcm(
+                token=token,
+                app_id=app_id,
+                android_id=checkin_result.android_id,
+                security_token=checkin_result.security_token,
+                installation=installation_result,
+            )
+
+            logger.debug(f"Gcm register return data {gcm_credentials}")
+
+            return gcm_credentials
         raise ValueError("Register error")
 
     async def fcm_register(self, sender_id: Union[str, int], token, retries=5):
@@ -325,7 +347,7 @@ class PullkinBase:
         app_name: str = "org.chromium.linux",
     ) -> AppCredentials:
         """register gcm and fcm tokens for sender_id"""
-        subscription = await self.gcm_register(
+        gcm_result = await self.gcm_register(
             sender_id=str(sender_id),
             app_id=app_id,
             api_key=api_key,
@@ -333,10 +355,10 @@ class PullkinBase:
             app_name=app_name,
             firebase_name=firebase_name,
         )
-        logger.debug(f"GCM subscription data: {subscription}")
-        fcm = await self.fcm_register(sender_id=sender_id, token=subscription["token"])
+        logger.debug(f"GCM subscription data: {gcm_result}")
+        fcm = await self.fcm_register(sender_id=sender_id, token=gcm_result.token)
         logger.debug(f"FCM subscription data: {fcm}")
-        res = {"gcm": subscription}
+        res = {"gcm": gcm_result}
         res.update(fcm)
 
         self.credentials = AppCredentials(**res)

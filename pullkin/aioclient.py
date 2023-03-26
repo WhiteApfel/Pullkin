@@ -243,13 +243,13 @@ class Pullkin(PullkinBase):
         req = LoginRequest()
         req.adaptive_heartbeat = False
         req.auth_service = 2
-        req.auth_token = self.credentials.gcm.securityToken
-        req.id = "gms-23.11.14.044"
+        req.auth_token = str(self.credentials.gcm.security_token)
+        req.id = "fcm-23.1.1"
         req.domain = "mcs.android.com"
-        req.device_id = f"android-{int(self.credentials.gcm.androidId)}"
+        req.device_id = f"android-{int(self.credentials.gcm.android_id)}"
         req.network_type = 1
-        req.resource = self.credentials.gcm.androidId
-        req.user = self.credentials.gcm.androidId
+        req.resource = str(self.credentials.gcm.android_id)
+        req.user = str(self.credentials.gcm.android_id)
         req.use_rmq2 = True
         req.setting.append(Setting(name="new_vc", value="1"))
         req.received_persistent_id.extend(self.persistent_ids)

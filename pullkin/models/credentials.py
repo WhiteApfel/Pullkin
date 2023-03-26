@@ -3,11 +3,26 @@ from typing import Union
 
 
 @dataclass
+class FirebaseInstallationResponse:
+    name: str
+    fid: str
+    refresh_token: str
+    auth_token: str
+    auth_token_expires_in: int
+
+
+@dataclass
+class CheckInResponse:
+    stats_ok: bool
+
+
+@dataclass
 class AppCredentialsGcm:
     token: str
-    appId: str
-    androidId: str
-    securityToken: str
+    app_id: str
+    android_id: str
+    security_token: str
+    installation: FirebaseInstallationResponse
 
 
 @dataclass
