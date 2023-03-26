@@ -244,17 +244,21 @@ class Pullkin(PullkinBase):
         req.adaptive_heartbeat = False
         req.auth_service = 2
         req.auth_token = self.credentials.gcm.securityToken
-        req.id = "chrome-111.0.5563.0"
+        req.id = "gms-23.11.14.044"
         req.domain = "mcs.android.com"
-        req.device_id = "android-%x" % int(self.credentials.gcm.androidId)
+        req.device_id = f"android-{int(self.credentials.gcm.androidId)}"
         req.network_type = 1
         req.resource = self.credentials.gcm.androidId
         req.user = self.credentials.gcm.androidId
         req.use_rmq2 = True
         req.setting.append(Setting(name="new_vc", value="1"))
         req.received_persistent_id.extend(self.persistent_ids)
-        await self.__send(req)
-        await self.__recv(first=True)
+        try:
+            await self.__send(req)
+            await self.__recv(first=True)
+        except:  # noqa
+            logger.exception("Error during send login request")
+            raise
         self._started = True
 
     async def __listen_coroutine(self) -> AsyncGenerator:
