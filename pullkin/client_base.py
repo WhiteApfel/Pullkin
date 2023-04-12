@@ -77,6 +77,7 @@ class PullkinBase:
     def __init__(self):
         self._http_client = None
         self.credentials: Optional[AppCredentials] = None
+        self.apps: dict[dict[str, AppCredentials | list[str]]] = {}
 
     @property
     def http_client(self):
@@ -342,8 +343,8 @@ class PullkinBase:
         sender_id: Union[str, int],
         app_id: str,
         api_key: str,
-        android_cert: str,
         firebase_name: str,
+        android_cert: str = 'da39a3ee5e6b4b0d3255bfef95601890afd80709',
         app_name: str = "org.chromium.linux",
     ) -> AppCredentials:
         """register gcm and fcm tokens for sender_id"""
@@ -361,8 +362,11 @@ class PullkinBase:
         res = {"gcm": gcm_result}
         res.update(fcm)
 
-        self.credentials = AppCredentials(**res)
-        return self.credentials
+        self.apps.setdefault(
+            str(sender_id), {"credentials": None, "persistent_ids": []}
+        )
+        self.apps[str(sender_id)]["credentials"] = AppCredentials(**res)
+        return self.apps[str(sender_id)]["credentials"]
 
     @classmethod
     def _encode_varint32(cls, x):

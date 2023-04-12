@@ -24,6 +24,13 @@ class AppCredentialsGcm:
     security_token: str
     installation: FirebaseInstallationResponse
 
+    def __post_init__(self):
+        if isinstance(self.android_id, int):
+            self.android_id = str(self.android_id)
+
+        if isinstance(self.security_token, int):
+            self.security_token = str(self.security_token)
+
 
 @dataclass
 class AppCredentialsFcm:

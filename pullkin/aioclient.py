@@ -15,6 +15,7 @@ from cryptography.hazmat.backends import default_backend
 from loguru import logger
 
 from pullkin.client_base import PullkinBase
+from pullkin.models import AppCredentials
 from pullkin.models.message import Message
 from pullkin.proto.mcs_proto import *  # noqa: F403
 
@@ -68,7 +69,9 @@ class Pullkin(PullkinBase):
         """
 
         def decorator(
-            callback: Callable[[Optional[Message], DataMessageStanza], Optional[Awaitable]]
+            callback: Callable[
+                [Optional[Message], DataMessageStanza], Optional[Awaitable]
+            ]
         ):
             self.on_notification_handlers.append(
                 {"callback": callback, "filter": handler_filter}
@@ -80,7 +83,9 @@ class Pullkin(PullkinBase):
     def register_on_notification_handler(
         self,
         handler_filter: Callable[[Optional[Message], DataMessageStanza], bool] = None,
-        callback: Callable[[Optional[Message], DataMessageStanza], Optional[Awaitable]] = None,
+        callback: Callable[
+            [Optional[Message], DataMessageStanza], Optional[Awaitable]
+        ] = None,
     ) -> None:
         """
         Function
@@ -207,9 +212,10 @@ class Pullkin(PullkinBase):
 
         p = await self.__recv()
         if not isinstance(p, DataMessageStanza):
+            logger.warning(f"Wow: other message {type(p)=}: {p.to_dict()}")
             return
         if self._is_deleted_message(p):
-            return
+            return  # TODO: add on deleted message
         p: DataMessageStanza
         crypto_key = self._app_data_by_key(p, "crypto-key", False)
         salt = self._app_data_by_key(p, "encryption", False)
@@ -217,6 +223,7 @@ class Pullkin(PullkinBase):
         if not (salt and crypto_key):
             message = None
         else:
+            credentials = self.apps.get(p.from_)["credentials"]
             crypto_key = crypto_key[3:]  # strip dh=
             salt = salt[5:]  # strip salt=
             crypto_key = urlsafe_b64decode(crypto_key.encode("ascii"))
@@ -240,21 +247,45 @@ class Pullkin(PullkinBase):
         await self.__run_on_notification_callbacks(message, p)
         return message
 
-    async def _listen_start(self) -> None:
-        await self.gcm_check_in(self.credentials.gcm)
+    async def _listen_start(
+        self,
+        sender_id: int | str | None = None,
+        credentials: AppCredentials | None = None,
+        persistent_ids: list[str] | None = None,
+    ) -> None:
+        if persistent_ids is None:
+            persistent_ids = []
+
+        if credentials is None:
+            if sender_id is not None and str(sender_id) in self.apps:
+                credentials = self.apps.get(str(sender_id)).get("credentials")
+            elif len(self.apps) == 1:
+                credentials = self.apps.get(list(self.apps.keys())[0])
+        else:
+            if sender_id is not None:
+                self.apps.setdefault(
+                    str(sender_id), {"credentials": None, "persistent_ids": []}
+                )
+                self.apps[str(sender_id)]["credentials"] = credentials
+
+        if credentials is None:
+            raise ValueError("Credentials is None. See docs ")  # TODO: add link
+
+        await self.gcm_check_in(credentials.gcm)
         req = LoginRequest()
         req.adaptive_heartbeat = False
         req.auth_service = 2
-        req.auth_token = str(self.credentials.gcm.security_token)
+        req.auth_token = credentials.gcm.security_token
         req.id = "fcm-23.1.1"
         req.domain = "mcs.android.com"
-        req.device_id = f"android-{int(self.credentials.gcm.android_id)}"
+        req.device_id = f"android-{credentials.gcm.android_id}"
         req.network_type = 1
-        req.resource = str(self.credentials.gcm.android_id)
-        req.user = str(self.credentials.gcm.android_id)
+        req.resource = credentials.gcm.android_id
+        print("type", type(credentials.gcm.security_token))
+        req.user = credentials.gcm.android_id
         req.use_rmq2 = True
         req.setting.append(Setting(name="new_vc", value="1"))
-        req.received_persistent_id.extend(self.persistent_ids)
+        req.received_persistent_id.extend(persistent_ids)
         try:
             await self.__send(req)
             await self.__recv(first=True)
@@ -269,7 +300,12 @@ class Pullkin(PullkinBase):
             if not self._started:
                 return
 
-    async def listen_coroutine(self) -> AsyncGenerator:
+    async def listen_coroutine(
+        self,
+        sender_id: int | str | None = None,
+        credentials: AppCredentials | None = None,
+        persistent_ids: list[str] | None = None,
+    ) -> AsyncGenerator:
         """
         Return a listener-coroutine
 
@@ -292,9 +328,11 @@ class Pullkin(PullkinBase):
 
         :return: coroutine
         """
+        # TODO: add docs
+
         if not (self.__reader or self.__writer):
             await self.__open_connection()
-        await self._listen_start()
+        await self._listen_start(sender_id, credentials, persistent_ids)
         coroutine = self.__listen_coroutine()
         return coroutine
 
@@ -302,11 +340,17 @@ class Pullkin(PullkinBase):
         while not all([self._started, self.__reader, self.__writer]):
             await asyncio.sleep(0.01)
 
-    async def _run_listener(self, timer: Union[int, float] = 0.05) -> None:
+    async def _run_listener(
+        self,
+        sender_id: int | str | None = None,
+        credentials: AppCredentials | None = None,
+        persistent_ids: list[str] | None = None,
+        timer: Union[int, float] = 0.05,
+    ) -> None:
         if not (self.__reader or self.__writer):
             await self.__open_connection()
 
-        await self._listen_start()
+        await self._listen_start(sender_id, credentials, persistent_ids)
         coroutine = self.__listen_coroutine()
         try:
             while self.__reader and self.__writer:
@@ -320,7 +364,13 @@ class Pullkin(PullkinBase):
         finally:
             await self.close()
 
-    async def run(self, timer: Union[int, float] = 0.05) -> None:
+    async def run(
+        self,
+        timer: Union[int, float] = 0.05,
+        sender_id: int | str | None = None,
+        credentials: AppCredentials | None = None,
+        persistent_ids: list[str] | None = None,
+    ) -> None:
         """
         Listens for push notifications
 
@@ -329,8 +379,11 @@ class Pullkin(PullkinBase):
         :param timer: timer in seconds between receive iteration
         :type timer: ``int`` or ``float``, optional, default ``0.05``
         """
+        # TODO: add docs
 
-        asyncio.create_task(self._run_listener(timer))
+        asyncio.create_task(
+            self._run_listener(sender_id, credentials, persistent_ids, timer)
+        )
         try:
             await asyncio.wait_for(self._wait_start(), timeout=10)
         except asyncio.exceptions.TimeoutError:
@@ -357,7 +410,7 @@ class Pullkin(PullkinBase):
         except ConnectionResetError:
             return
         except ssl.SSLError:
-            ...
+            return
         except:  # noqa: E722
             logger.exception("Error during close Pullkin:")
             raise

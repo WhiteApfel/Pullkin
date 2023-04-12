@@ -47,8 +47,16 @@ import asyncio
 from pullkin import Pullkin
 from pullkin.models import Message, AppCredentials
 
-SENDER_ID = '<<SENDER_ID>>'
-APP_ID = '<<APP_ID>>'
+SENDER_ID = '<<SENDER_ID>>'  # '1234567890'
+APP_ID = '<<APP_ID>>'  # '1:1234567890:android:abcdef1234567890'
+API_ID = '<<API_ID>>'  # 'AIzaSyDce4zFw4CqLqW2eCOqTbXfDx9a8mRnLpI'
+FIREBASE_NAME = '<<FIREBASE_NAME'  # 'pullkin-example'
+APP_NAME = '<<APP_NAME>>'  # 'cc.pullkin.example'
+
+#
+ANDROID_CERT = 'da39a3ee5e6b4b0d3255bfef95601890afd80709'  
+# 'da39a3ee5e6b4b0d3255bfef95601890afd80709' is default hash
+
 pullkin = Pullkin()
 
 if not os.path.exists('.persistent_ids.txt'):
@@ -73,12 +81,16 @@ async def on_notification(message: Message, data_message):
 async def main():
     if not os.path.exists('.pullkin_app_credentials'):
         with open('.pullkin_app_credentials', 'w+') as f:
-            credentials = await pullkin.register(SENDER_ID, APP_ID)
+            credentials = await pullkin.register(SENDER_ID, APP_ID, API_ID, FIREBASE_NAME, ANDROID_CERT,  APP_NAME)
             f.write(json.dumps(credentials.dict()))
     else:
         with open('.pullkin_app_credentials', 'r') as f:
-            pullkin.credentials = AppCredentials(**json.loads(f.read()))
-    await pullkin.run()
+            credentials = AppCredentials(**json.loads(f.read()))
+    await pullkin.run(
+        sender_id=SENDER_ID,
+        credentials=credentials,
+        persistent_ids=received_persistent_ids,
+    )
 
 
 asyncio.run(main())
