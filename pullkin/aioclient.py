@@ -228,9 +228,9 @@ class Pullkin(PullkinBase):
             salt = salt[5:]  # strip salt=
             crypto_key = urlsafe_b64decode(crypto_key.encode("ascii"))
             salt = urlsafe_b64decode(salt.encode("ascii"))
-            der_data = self.credentials.keys.private
+            der_data = credentials.keys.private
             der_data = urlsafe_b64decode(der_data.encode("ascii") + b"========")
-            secret = self.credentials.keys.secret
+            secret = credentials.keys.secret
             secret = urlsafe_b64decode(secret.encode("ascii") + b"========")
             privkey = load_der_private_key(
                 der_data, password=None, backend=default_backend()

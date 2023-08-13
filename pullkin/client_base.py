@@ -130,7 +130,7 @@ class PullkinBase:
         data = {
             "fid": self.generate_fid(),
             "authVersion": "FIS_v2",
-            "app_id": app_id,
+            "appId": app_id,
             "sdkVersion": "a:17.1.0",
         }
         headers = {
