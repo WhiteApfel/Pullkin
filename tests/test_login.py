@@ -14,8 +14,8 @@ from tests.testdata import (
 @pytest.mark.asyncio
 async def test_aio_login():
     client = Pullkin()
-    await client.register(
-        SENDER_ID, APP_ID, API_KEY, ANDROID_CERT, FIREBASE_NAME, APP_NAME
+    credentials = await client.register(
+        SENDER_ID, APP_ID, API_KEY, FIREBASE_NAME, ANDROID_CERT, APP_NAME
     )
 
-    await client.listen_coroutine()
+    await client.listen_coroutine(SENDER_ID, credentials)

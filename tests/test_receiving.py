@@ -20,14 +20,14 @@ from tests.testdata import (
 async def test_aio_receive(fcm: FirebaseAdmin):
     client = Pullkin()
     fcm_cred = await client.register(
-        SENDER_ID, APP_ID, API_KEY, ANDROID_CERT, FIREBASE_NAME, APP_NAME
+        SENDER_ID, APP_ID, API_KEY, FIREBASE_NAME, ANDROID_CERT, APP_NAME
     )
 
     @client.on_notification()
     def on_notification(message: Message, data_message):
         print(message)
 
-    coroutine = await client.listen_coroutine()
+    coroutine = await client.listen_coroutine(SENDER_ID, fcm_cred)
 
     notification_title = uuid4().hex
     notification_body = uuid4().hex
