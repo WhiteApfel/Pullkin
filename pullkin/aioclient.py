@@ -4,7 +4,6 @@ import json
 import ssl
 import struct
 import uuid
-
 from base64 import urlsafe_b64decode
 from binascii import hexlify
 from typing import Any, AsyncGenerator, Awaitable, Callable, Optional, Union
