@@ -48,6 +48,7 @@ from pullkin import Pullkin
 from pullkin.models import Message, AppCredentials
 
 SENDER_ID = '<<SENDER_ID>>'  # '1234567890'
+# ANOTHER_SENDER_ID = '<<SENDER_ID>>'  # '1234567890'
 APP_ID = '<<APP_ID>>'  # '1:1234567890:android:abcdef1234567890'
 API_ID = '<<API_ID>>'  # 'AIzaSyDce4zFw4CqLqW2eCOqTbXfDx9a8mRnLpI'
 FIREBASE_NAME = '<<FIREBASE_NAME'  # 'pullkin-example'
@@ -82,15 +83,16 @@ async def main():
     if not os.path.exists('.pullkin_app_credentials'):
         with open('.pullkin_app_credentials', 'w+') as f:
             credentials = await pullkin.register(SENDER_ID, APP_ID, API_ID, FIREBASE_NAME, ANDROID_CERT,  APP_NAME)
-            f.write(json.dumps(credentials.dict()))
+            f.write(json.dumps(credentials.model_dump(mode="json")))
     else:
         with open('.pullkin_app_credentials', 'r') as f:
-            credentials = AppCredentials(**json.loads(f.read()))
-    await pullkin.run(
-        sender_id=SENDER_ID,
-        credentials=credentials,
-        persistent_ids=received_persistent_ids,
-    )
+            credentials = AppCredentials.model_validate(json.loads(f.read()))
+    
+    await pullkin.add_app(sender_id=SENDER_ID, credentials=credentials, persistent_ids=received_persistent_ids)
+    # await pullkin.add_app(sender_id=ANOTHER_SENDER_ID, credentials=another_credentials, persistent_ids=another_received_persistent_ids)
+    
+    
+    await pullkin.run()
 
 
 asyncio.run(main())

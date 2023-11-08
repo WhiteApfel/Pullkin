@@ -1,8 +1,7 @@
-from dataclasses import is_dataclass
-
 import pytest
 
 from pullkin import Pullkin
+from pullkin.models import AppCredentials
 from tests.testdata import (
     ANDROID_CERT,
     API_KEY,
@@ -20,4 +19,4 @@ async def test_aio_registration():
         SENDER_ID, APP_ID, API_KEY, FIREBASE_NAME, ANDROID_CERT, APP_NAME
     )
 
-    assert is_dataclass(credentials)
+    assert isinstance(credentials, AppCredentials)

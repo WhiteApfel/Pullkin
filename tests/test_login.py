@@ -17,5 +17,5 @@ async def test_aio_login():
     credentials = await client.register(
         SENDER_ID, APP_ID, API_KEY, FIREBASE_NAME, ANDROID_CERT, APP_NAME
     )
-
-    await client.listen_coroutine(SENDER_ID, credentials)
+    await client.add_app(SENDER_ID, credentials=credentials, persistent_ids=[])
+    await client.listen_coroutine(SENDER_ID)

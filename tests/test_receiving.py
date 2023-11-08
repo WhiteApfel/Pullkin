@@ -27,7 +27,8 @@ async def test_aio_receive(fcm: FirebaseAdmin):
     def on_notification(message: Message, data_message):
         print(message)
 
-    coroutine = await client.listen_coroutine(SENDER_ID, fcm_cred)
+    await client.add_app(SENDER_ID, fcm_cred, [])
+    coroutine = await client.listen_coroutine(SENDER_ID)
 
     notification_title = uuid4().hex
     notification_body = uuid4().hex

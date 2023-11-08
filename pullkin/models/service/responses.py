@@ -1,8 +1,7 @@
-from dataclasses import dataclass
+from pydantic import BaseModel
 
 
-@dataclass
-class CheckinResponse:
+class CheckinResponse(BaseModel):
     is_ok: bool
     time_ms: int
     android_id: str
@@ -11,6 +10,5 @@ class CheckinResponse:
     device_data_version_info: str
 
 
-@dataclass
-class GcmRegisterResponse:
+class GcmRegisterResponse(BaseModel):
     token: str
