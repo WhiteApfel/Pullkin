@@ -1,8 +1,10 @@
 asyncio~=3.4.3
 betterproto~=1.2.5
-cryptography~=41.0.3
+cryptography~=41.0.5
 http-ece~=1.1.0
-httpx~=0.24.1
-loguru~=0.7.0
-oscrypto==1.3.0
-python-dotenv==1.0.0
+httpx~=0.25.1
+loguru~=0.7.2
+oscrypto~=1.3.0
+python-dotenv~=1.0.0
+ujson~=5.8.0
+pydantic==2.4.2
