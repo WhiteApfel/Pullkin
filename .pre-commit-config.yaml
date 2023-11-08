@@ -33,6 +33,7 @@ repos:
         - push
       - id: isort
         files: 'tests/.*'
+        args: [--profile=black]
         stages:
         - commit
         - push

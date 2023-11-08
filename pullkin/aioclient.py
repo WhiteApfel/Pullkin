@@ -403,8 +403,8 @@ class Pullkin(PullkinBase):
                         app_data["writer"].close()
                         try:
                             await asyncio.wait_for(app_data["writer"].wait_closed(), 5)
-                        except asyncio.exceptions.TimeoutError:
-                            ...
+                        except asyncio.exceptions.TimeoutError:  # noqa
+                            ...  # noqa
                         app_data["writer"] = None
                         app_data["reader"] = None
                     except ConnectionResetError:
