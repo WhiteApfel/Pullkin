@@ -84,7 +84,7 @@ class Pullkin(PullkinBase):
         for handler in self.on_notification_handlers:
             if handler["filter"](message, data_message):
                 for field, annotation in handler["callback"].__annotations__.items():
-                    if field != "return" and issubclass(annotation, Message):
+                    if field != "return" and issubclass(annotation, Message) and message is not None:
                         message = message.to_another_model(annotation)
                 if inspect.iscoroutinefunction(handler["callback"]):
                     await handler["callback"](message, data_message)

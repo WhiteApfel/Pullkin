@@ -2,6 +2,8 @@ from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from pullkin.proto.mcs_proto import AppData
+
 
 class NotificationData(BaseModel):
     """
@@ -26,7 +28,8 @@ class NotificationData(BaseModel):
 
     @model_validator(mode="before")
     def add_raw(cls, values: dict[str, Any]) -> dict[str, Any]:
-        values["raw"] = values
+        if "raw" not in values:
+            values["raw"] = dict(values)
 
         return values
 
@@ -54,14 +57,16 @@ class Message(BaseModel, Generic[NotificationDataType]):
 
     raw: dict[str, Any]
 
-    sender_id: str | None = None
+    data: dict[str, Any] | None = None
+    sender_id: str | None = Field(None, alias="from")
     priority: str | None = None
-    notification: NotificationDataType
+    notification: NotificationDataType | None = None
     fcm_message_id: str | None = Field(None, alias="fcmMessageId")
 
     @model_validator(mode="before")
     def add_raw(cls, values: dict[str, Any]) -> dict[str, Any]:
-        values["raw"] = values
+        if "raw" not in values:
+            values["raw"] = dict(values)
 
         return values
 

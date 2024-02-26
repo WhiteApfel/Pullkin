@@ -192,6 +192,15 @@ class AppData(betterproto.Message):
     value: str = betterproto.string_field(2)
 
 
+class AppDataList(list):
+    def __getitem__(self, item):
+        if isinstance(item, str):
+            for x in self:
+                if x.key == item:
+                    return x.value
+        return super().__getitem__(item)
+
+
 @dataclass
 class DataMessageStanza(betterproto.Message):
     """* TAG: 8"""
@@ -207,7 +216,7 @@ class DataMessageStanza(betterproto.Message):
     # The collapsed key, DMP.3
     token: str = betterproto.string_field(6)
     # User data + GOOGLE. prefixed special entries, DMP.4
-    app_data: List["AppData"] = betterproto.message_field(7)
+    app_data: AppDataList["AppData"] = betterproto.message_field(7)
     # Not used.
     from_trusted_server: bool = betterproto.bool_field(8)
     # Part of the ACK protocol, returned in DataMessageResponse on server side.
