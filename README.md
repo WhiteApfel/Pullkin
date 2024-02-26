@@ -46,6 +46,7 @@ import asyncio
 
 from pullkin import Pullkin
 from pullkin.models import Message, AppCredentials
+from pullkin.proto.mcs_proto import DataMessageStanza
 
 SENDER_ID = '<<SENDER_ID>>'  # '1234567890'
 # ANOTHER_SENDER_ID = '<<SENDER_ID>>'  # '1234567890'
@@ -69,7 +70,7 @@ with open(".persistent_ids.txt", "r") as f:
 
 
 @pullkin.on_notification()
-async def on_notification(message: Message, data_message):
+async def on_notification(message: Message, data_message: DataMessageStanza):
     idstr = data_message.persistent_id + "\n"
     with open(".persistent_ids.txt", "r") as f:
         if idstr in f:
