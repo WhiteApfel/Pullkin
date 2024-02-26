@@ -2,7 +2,7 @@
 # sources: mcs.proto
 # plugin: python-betterproto
 from dataclasses import dataclass
-from typing import List
+from typing import List, Any
 
 import betterproto
 
@@ -193,12 +193,23 @@ class AppData(betterproto.Message):
 
 
 class AppDataList(list):
-    def __getitem__(self, item):
+    def __getitem__(self, item) -> AppData:
         if isinstance(item, str):
             for x in self:
                 if x.key == item:
                     return x.value
         return super().__getitem__(item)
+
+    def __contains__(self, item) -> bool:
+        if isinstance(item, str):
+            for x in self:
+                if x.key == item:
+                    return True
+            return False
+        return super().__getitem__(item)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {i.key: i.value for i in self}
 
 
 @dataclass
