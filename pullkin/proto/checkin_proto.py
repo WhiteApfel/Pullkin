@@ -181,6 +181,6 @@ class AndroidCheckinResponse(betterproto.Message):
     delete_setting: List[str] = betterproto.string_field(10)
     setting: List["GservicesSetting"] = betterproto.message_field(5)
     market_ok: bool = betterproto.bool_field(6)
-    android_id: float = betterproto.fixed64_field(7)
-    security_token: float = betterproto.fixed64_field(8)
+    android_id: str = betterproto.fixed64_field(7)
+    security_token: str = betterproto.fixed64_field(8)
     version_info: str = betterproto.string_field(11)

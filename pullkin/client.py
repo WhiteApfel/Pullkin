@@ -6,14 +6,14 @@ import struct
 import uuid
 from base64 import urlsafe_b64decode
 from binascii import hexlify
-from typing import Any, AsyncGenerator, Awaitable, Callable, Optional, Union
+from typing import AsyncGenerator, Awaitable, Callable, Optional, Union
 
 import cryptography.hazmat.primitives.serialization as serialization
 import http_ece
 from cryptography.hazmat.backends import default_backend
 from loguru import logger
 
-from pullkin.client_base import PullkinBase
+from pullkin.core import PullkinCore, PullkinAppData
 from pullkin.models import AppCredentials
 from pullkin.models.message import Message, NotificationData
 from pullkin.proto.mcs_proto import *  # noqa: F403
@@ -21,13 +21,11 @@ from pullkin.proto.mcs_proto import *  # noqa: F403
 logger.disable("pullkin")
 
 
-class Pullkin(PullkinBase):
+class Pullkin(PullkinCore):
     def __init__(self):
         super().__init__()
-        self.persistent_ids: list = []
-        self.callback: Optional[
-            Callable[[Optional[Message], DataMessageStanza], Optional[Awaitable]]
-        ] = None
+        self.apps: dict[str, PullkinAppData] = {}
+
         self.on_notification_handlers: list = []
         self.once: bool = True
         self._started: bool = False
@@ -77,29 +75,26 @@ class Pullkin(PullkinBase):
 
         return decorator
 
-    async def __run_on_notification_callbacks(
+    @staticmethod
+    async def _process_handler(handler, message: Message, data_message: DataMessageStanza) -> None:
+        for field, annotation in handler["callback"].__annotations__.items():
+            if field != "return" and issubclass(annotation, Message) and message is not None:
+                message = message.to_another_model(annotation)
+        if inspect.iscoroutinefunction(handler["callback"]):
+            await handler["callback"](message, data_message)
+        else:
+            handler["callback"](message, data_message)
+
+    async def _run_on_notification_callbacks(
         self, message: Message, data_message: DataMessageStanza
     ) -> None:
         x = 0
         for handler in self.on_notification_handlers:
             if handler["filter"](message, data_message):
-                for field, annotation in handler["callback"].__annotations__.items():
-                    if field != "return" and issubclass(annotation, Message) and message is not None:
-                        message = message.to_another_model(annotation)
-                if inspect.iscoroutinefunction(handler["callback"]):
-                    await handler["callback"](message, data_message)
-                else:
-                    handler["callback"](message, data_message)
+                await self._process_handler(handler, message, data_message)
                 x += 1
                 if self.once:
                     break
-        else:
-            if self.callback is not None:
-                if inspect.iscoroutinefunction(self.callback):
-                    await self.callback(message, data_message)
-                else:
-                    self.callback(message, data_message)
-
         if not x:
             logger.debug("No one callback was called")
 
@@ -110,8 +105,8 @@ class Pullkin(PullkinBase):
         reader, writer = await asyncio.open_connection(
             self.PUSH_HOST, self.PUSH_PORT, ssl=ssl_ctx
         )
-        self.apps[sender_id]["reader"] = reader
-        self.apps[sender_id]["writer"] = writer
+        self.apps[sender_id].reader = reader
+        self.apps[sender_id].writer = writer
 
         logger.debug(
             f"Connected to SSL socket {self.PUSH_HOST}:{self.PUSH_PORT} with default"
@@ -121,7 +116,7 @@ class Pullkin(PullkinBase):
     async def __read(self, sender_id: str, size: int) -> bytes:
         buf = b""
         while len(buf) < size:
-            buf += await self.apps[sender_id]["reader"].read(size - len(buf))
+            buf += await self.apps[sender_id].reader.read(size - len(buf))
         return buf
 
     async def __read_varint32(self, sender_id: str) -> int:
@@ -142,12 +137,12 @@ class Pullkin(PullkinBase):
         payload = packet.SerializeToString()
         buf = bytes(header) + self._encode_varint32(len(payload)) + payload
         logger.debug(f"HEX buffer:\n`{hexlify(buf)}` #{send_id}")
-        self.apps[sender_id]["writer"].write(buf)
-        await self.apps[sender_id]["writer"].drain()
+        self.apps[sender_id].writer.write(buf)
+        await self.apps[sender_id].writer.drain()
 
     async def __recv(
         self, sender_id: str, first=False
-    ) -> Optional[PullkinBase.packet_union]:
+    ) -> Optional[PullkinCore.packet_union]:
         logger.debug(f"Receive #{(recv_id := str(uuid.uuid4()))}")
         if first:
             version, tag = struct.unpack("BB", await self.__read(sender_id, 2))
@@ -170,7 +165,7 @@ class Pullkin(PullkinBase):
             return payload
         return None
 
-    async def __listen_once(self, sender_id: str) -> Optional[Message]:
+    async def __listen_once(self, sender_id: str) -> Message | None:
         load_der_private_key = serialization.load_der_private_key
 
         p = await self.__recv(sender_id)
@@ -186,7 +181,7 @@ class Pullkin(PullkinBase):
         if not (salt and crypto_key):
             message = None
         else:
-            credentials = self.apps.get(p.from_)["credentials"]
+            credentials = self.apps.get(p.from_).credentials
             crypto_key = crypto_key[3:]  # strip dh=
             salt = salt[5:]  # strip salt=
             crypto_key = urlsafe_b64decode(crypto_key.encode("ascii"))
@@ -208,17 +203,18 @@ class Pullkin(PullkinBase):
             )
             data: dict[str, Any] = json.loads(decrypted.decode("utf-8"))
             message = Message[NotificationData].model_validate(data)
-        await self.__run_on_notification_callbacks(message, p)
+        await self._run_on_notification_callbacks(message, p)
         return message
 
     async def _listen_start(
         self,
         sender_id: int | str | None = None,
         credentials: AppCredentials | None = None,
-        persistent_ids: list[str] | None = None,
+        persistent_ids: set[str] | None = None,
     ) -> None:
         """
-        Connect "device" to "app" cloud messages. After this method messages will be delivered to this app.
+        Connect "device" to "app" cloud messages.
+        After this method, messages will be delivered to this app.
 
         Args:
             sender_id:
@@ -228,7 +224,7 @@ class Pullkin(PullkinBase):
         Returns:
 
         """
-        if not (self.apps[sender_id]["reader"] or self.apps[sender_id]["writer"]):
+        if not (self.apps[sender_id].reader or self.apps[sender_id].writer):
             await self.__open_connection(sender_id)
 
         await self.gcm_check_in(credentials.gcm)
@@ -251,25 +247,25 @@ class Pullkin(PullkinBase):
         except:  # noqa
             logger.exception("Error during send login request")
             raise
-        self.apps[sender_id]["is_started"] = True
+        self.apps[sender_id].is_started = True
 
-    async def __listen_coroutine(self, sender_id: str) -> AsyncGenerator:
+    async def __listen_coroutine(self, sender_id: str) -> AsyncGenerator[Message | None, None]:
         while True:
             yield await self.__listen_once(sender_id)
-            if not self.apps[sender_id]["is_started"]:
+            if not self.apps[sender_id].is_started:
                 return
 
     async def listen_coroutine(
         self,
         sender_id: int | str | None = None,
-    ) -> AsyncGenerator:
+    ) -> AsyncGenerator[Message | None, None]:
         """
         Return a listener-coroutine
 
         Every coroutine iteration is one received push
         (or not, because it starts reading and waiting for data on socket)
 
-        You can use coroutine like this, for example:
+        You can use coroutines like this, for example:
 
         :: python code
             # <some code>
@@ -289,7 +285,7 @@ class Pullkin(PullkinBase):
 
     async def _wait_start(self, sender_id: str):
         while not all(
-            self.apps[sender_id][i] for i in ["is_started", "reader", "writer"]
+            self.apps[sender_id].__getattribute__(i) for i in ["is_started", "reader", "writer"]
         ):
             await asyncio.sleep(0.01)
 
@@ -298,13 +294,13 @@ class Pullkin(PullkinBase):
         sender_id: str,
         timer: Union[int, float] = 0.05,
     ) -> None:
-        if not (self.apps[sender_id]["reader"] or self.apps[sender_id]["writer"]):
+        if not (self.apps[sender_id].reader or self.apps[sender_id].writer):
             await self.__open_connection(sender_id)
 
         coroutine = self.__listen_coroutine(sender_id)
 
         try:
-            while self.apps[sender_id]["reader"] and self.apps[sender_id]["writer"]:
+            while self.apps[sender_id].reader and self.apps[sender_id].writer:
                 await coroutine.asend(None)
                 await asyncio.sleep(timer)
         except (KeyboardInterrupt, asyncio.CancelledError):
@@ -316,7 +312,7 @@ class Pullkin(PullkinBase):
             await self.close()
 
     async def add_app(
-        self, sender_id: str, credentials: AppCredentials, persistent_ids: list[str]
+        self, sender_id: str, credentials: AppCredentials, persistent_ids: set[str]
     ):
         """
         Subscribe device to app
@@ -330,27 +326,30 @@ class Pullkin(PullkinBase):
 
         """
         if persistent_ids is None:
-            persistent_ids = []
+            persistent_ids = set()
+
+        if isinstance(sender_id, int):
+            sender_id = str(sender_id)
 
         if credentials is None:
-            if sender_id is not None and str(sender_id) in self.apps:
-                credentials = self.apps.get(str(sender_id)).get("credentials")
+            if sender_id is not None and sender_id in self.apps:
+                credentials = self.apps[sender_id].credentials
             elif sender_id is None and len(self.apps) == 1:
-                credentials = self.apps.get(list(self.apps.keys())[0])
+                credentials = self.apps.get(list(self.apps.keys())[0]).credentials
         else:
             if sender_id is not None:
                 self.apps.setdefault(
-                    str(sender_id),
-                    {
-                        "credentials": None,
-                        "persistent_ids": [],
-                        "is_started": False,
-                        "reader": None,
-                        "writer": None,
-                        "listener": None,
-                    },
+                    sender_id,
+                    PullkinAppData(
+                        credentials=None,
+                        persistent_ids=set(),
+                        is_started=False,
+                        reader=None,
+                        writer=None,
+                        listener=None,
+                    )
                 )
-                self.apps[str(sender_id)]["credentials"] = credentials
+                self.apps[sender_id].credentials = credentials
 
         if credentials is None:
             raise ValueError("Credentials is None. See docs ")  # TODO: add link
@@ -381,42 +380,49 @@ class Pullkin(PullkinBase):
 
         Args:
             sender_ids: sender_ids to listening in background
-            timer: timer in seconds between receive iteration
+            timer: timer in seconds between receive-iteration
         """
         # TODO: add docs
 
         for sender_id in self.apps:
             if sender_ids is None or sender_id in sender_ids:
-                self.apps[sender_id]["listener"] = asyncio.create_task(
+                self.apps[sender_id].listener = asyncio.create_task(
                     self._run_listener(sender_id, timer)
                 )
 
+    async def _close_app(self, sender_id: str):
+        app_data = self.apps[sender_id]
+
+        if app_data.listener:
+            app_data.listener.cancel()
+
+        if app_data.writer:
+            try:
+                app_data.is_started = False
+                app_data.writer.close()
+                try:
+                    await asyncio.wait_for(app_data.writer.wait_closed(), 5)
+                except asyncio.exceptions.TimeoutError:  # noqa
+                    ...  # noqa
+                app_data.writer = None
+                app_data.reader = None
+            except ConnectionResetError:
+                pass
+            except ssl.SSLError:
+                pass
+            except:  # noqa: E722
+                logger.exception("Error during close Pullkin:")
+                raise
+
+        del self.apps[sender_id]
+
     async def close(self, sender_id: str | None = None):
-        for i_sender_id, app_data in self.apps.items():
-            if sender_id == i_sender_id or sender_id is None:
-                if app_data["listener"]:
-                    app_data["listener"].cancel()
+        if sender_id is None:
+            for sender_id in self.apps:
+                await self._close_app(sender_id)
+        else:
+            await self._close_app(sender_id)
 
-                if app_data["writer"]:
-                    try:
-                        app_data["is_started"] = False
-                        app_data["writer"].close()
-                        try:
-                            await asyncio.wait_for(app_data["writer"].wait_closed(), 5)
-                        except asyncio.exceptions.TimeoutError:  # noqa
-                            ...  # noqa
-                        app_data["writer"] = None
-                        app_data["reader"] = None
-                    except ConnectionResetError:
-                        continue
-                    except ssl.SSLError:
-                        continue
-                    except:  # noqa: E722
-                        logger.exception("Error during close Pullkin:")
-                        raise
-
-                del self.apps[sender_id]
-
-        if sender_id is None and self._http_client and len(self.apps) == 0:
+        if len(self.apps) == 0:
             await self._http_client.aclose()
             self._http_client = None

@@ -46,6 +46,8 @@ class Message(BaseModel, Generic[NotificationDataType]):
     You can create a child model that describes the fields you use in the notification.
 
     Example:
+
+    :: python code
         class MyMessage(Message):
             my_field: str
 
@@ -72,27 +74,31 @@ class Message(BaseModel, Generic[NotificationDataType]):
 
     def to_another_model(self, another_model: MessageType) -> MessageType:
         """
-        You can use this method to convert model to your model.
-        A message will be converted into the another_model using another_model.model_validate(self.raw)
+        You can use this method to convert a Message-model to your model.
+        A Message will be converted into the another_model using another_model.model_validate(self.raw)
 
-        message: Message = ...
+        :: python code
+            message: Message = ...
 
-        my_message: Message[MyNotificationData] = message.to_another_model(Message[MyNotificationData])
-        my_message: MyMessage[MyNotificationData] = message.to_another_model(MyMessage[MyNotificationData])
-        my_message: MyMessage[NotificationData] = message.to_another_model(MyMessage[NotificationData])
-        my_message: MyMessage = message.to_another_model(MyMessage)
-        # or use simple
-        my_message: MyMessage[MyNotificationData] = MyMessage[MyNotificationData].model_validate(message.raw)
+            my_message: Message[MyNotificationData] = message.to_another_model(Message[MyNotificationData])
+            my_message: MyMessage[MyNotificationData] = message.to_another_model(MyMessage[MyNotificationData])
+            my_message: MyMessage[NotificationData] = message.to_another_model(MyMessage[NotificationData])
+            my_message: MyMessage = message.to_another_model(MyMessage)
+
+            # or use simple
+            my_message: MyMessage[MyNotificationData] = MyMessage[MyNotificationData].model_validate(message.raw)
         """
-        generic_metadata = another_model.__pydantic_generic_metadata__
+        generic_metadata = getattr(another_model, '__pydantic_generic_metadata__', None)
 
-        MessageModel = generic_metadata.get("origin") or Message
-        (NotificationModel,) = generic_metadata.get("args") or (None,)
+        if generic_metadata:
+            message_model = generic_metadata.get("origin") or Message
+            notification_model = generic_metadata.get("args", (None,))[0]
 
-        if NotificationModel:
-            return MessageModel[NotificationModel].model_validate(self.raw)
+            if notification_model:
+                return message_model[notification_model].model_validate(self.raw)
 
-        return MessageModel.model_validate(self.raw)
+        # If no generic arguments, validate the raw data with the provided model
+        return another_model.model_validate(self.raw)
 
     def __getitem__(self, item):
         return self.raw[item]

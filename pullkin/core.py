@@ -7,6 +7,7 @@ import secrets
 import time
 from asyncio import StreamReader, StreamWriter, Task
 from base64 import urlsafe_b64encode
+from dataclasses import dataclass, field
 from typing import Optional, TypedDict, Union
 from urllib.parse import urlencode
 
@@ -15,7 +16,7 @@ from loguru import logger
 from oscrypto.asymmetric import generate_pair
 
 from pullkin.models import AppCredentials, AppCredentialsGcm
-from pullkin.models.credentials import FirebaseInstallationResponse
+from pullkin.models.credentials import FirebaseInstallation, AppCredentialsKeys, AppCredentialsFcm
 from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuildProto
 from pullkin.proto.checkin_proto import AndroidCheckinRequest, AndroidCheckinResponse
 from pullkin.proto.mcs_proto import *  # noqa: F403
@@ -23,16 +24,17 @@ from pullkin.proto.mcs_proto import *  # noqa: F403
 logger.disable("pullkin")
 
 
-class AppDataDict(TypedDict):
-    credentials: AppCredentials | None
-    persistent_ids: list[str]
-    is_started: bool
-    reader: StreamReader | None
-    writer: StreamWriter | None
-    listener: Task | None
+@dataclass
+class PullkinAppData:
+    credentials: AppCredentials | None = None
+    persistent_ids: set[str] = field(default_factory=set)
+    is_started: bool = False
+    reader: StreamReader | None = None
+    writer: StreamWriter | None = None
+    listener: Task | None = None
 
 
-class PullkinBase:
+class PullkinCore:
     unicode = str
 
     SERVER_KEY = (
@@ -46,9 +48,10 @@ class PullkinBase:
     CHECKIN_URL = "https://android.clients.google.com/checkin"
     FCM_SUBSCRIBE = "https://fcm.googleapis.com/fcm/connect/subscribe"
     FCM_ENDPOINT = "https://fcm.googleapis.com/fcm/send"
-    FCM_INSTALLATION_URL_PATTERN = (
+    FCM_INSTALLATION_ENDPOINT_PATTERN = (
         "https://firebaseinstallations.googleapis.com/v1/projects/{}/installations"
     )
+    FCM_REGISTER_ENDPOINT_PATTERN = "https://fcmregistrations.googleapis.com/v1/projects/{}/registrations"
 
     PUSH_HOST = "mtalk.google.com"
     PUSH_PORT = 5228
@@ -86,8 +89,6 @@ class PullkinBase:
 
     def __init__(self):
         self._http_client = None
-        self.credentials: Optional[AppCredentials] = None
-        self.apps: dict[str, AppDataDict] = {}
 
     @property
     def http_client(self):
@@ -99,6 +100,17 @@ class PullkinBase:
         if self._http_client:
             await self._http_client.aclose()
             self._http_client = None
+
+    @classmethod
+    def urlsafe_base64(cls, data):
+        """
+        base64-encodes data with -_ instead of +/ and removes all = padding.
+        also strips newlines
+
+        returns a string
+        """
+        res = urlsafe_b64encode(data).replace(b"=", b"")
+        return res.replace(b"\n", b"").decode("ascii")
 
     @classmethod
     def generate_fid(cls) -> str:
@@ -135,13 +147,13 @@ class PullkinBase:
         api_key: str,
         android_cert: str,
         app_package: str,
-        firebase_name: str,
-    ) -> FirebaseInstallationResponse:
+        firebase_project_id: str,
+    ) -> FirebaseInstallation:
         data = {
             "fid": self.generate_fid(),
             "authVersion": "FIS_v2",
             "appId": app_id,
-            "sdkVersion": "a:17.1.0",
+            "sdkVersion": "a:18.0.0",
         }
         headers = {
             "x-goog-api-key": api_key,
@@ -151,7 +163,7 @@ class PullkinBase:
 
         req = self.http_client.build_request(
             method="POST",
-            url=self.FCM_INSTALLATION_URL_PATTERN.format(firebase_name),
+            url=self.FCM_INSTALLATION_ENDPOINT_PATTERN.format(firebase_project_id),
             headers=headers,
             json=data,
             timeout=5,
@@ -160,13 +172,76 @@ class PullkinBase:
 
         resp_data = json.loads(resp.decode("utf-8"))
 
-        return FirebaseInstallationResponse(
+        return FirebaseInstallation(
             name=resp_data["name"],
             fid=resp_data["fid"],
             refresh_token=resp_data["refreshToken"],
             auth_token=resp_data["authToken"]["token"],
             auth_token_expires_in=int(resp_data["authToken"]["expiresIn"][:-1]),
         )
+
+    async def new_fcm_register(
+        self,
+        gcm_token: str,
+        api_key: str,
+        firebase_project_id: str,
+        firebase_installation: FirebaseInstallation,
+        retries: int = 5,
+    ) -> tuple[AppCredentialsKeys, AppCredentialsFcm]:
+        """
+        Generates key pair and register a GCM token
+
+        Register may return error in `AppCredentialsFcm.error`
+        Check `AppCredentialsFcm.is_success` for validate success result
+        Check `AppCredentialsFcm.error` for more details
+
+        sender_id: sender_id
+        gcm_token: the subscription gcm_token returned by `Pullkin.gcm_register(...)`
+
+        returns AppCredentialsKeys and AppCredentialsFcm
+        """
+        # I used this analyzer to figure out how to slice the asn1 structs
+        # https://lapo.it/asn1js
+        # first byte of public key is skipped for some reason
+        # maybe it's always zero
+        public, private = generate_pair("ec", curve=self.unicode("secp256r1"))
+        from base64 import b64encode
+
+        logger.debug(f"# Public key {b64encode(public.asn1.dump())}")
+        logger.debug(f"# Private key {b64encode(private.asn1.dump())}")
+
+        keys = AppCredentialsKeys(
+            public=self.urlsafe_base64(public.asn1.dump()[26:]),
+            private=self.urlsafe_base64(private.asn1.dump()),
+            secret=self.urlsafe_base64(os.urandom(16)),
+        )
+
+        body = {
+            "web": {
+                "applicationPubKey": "",
+                "auth": keys.secret,
+                "endpoint": f"{self.FCM_ENDPOINT}/{gcm_token}",
+                "p256dh": keys.public,
+
+            },
+        }
+        headers = {
+            "x-goog-api-key": api_key,
+            "x-goog-firebase-installations-auth": firebase_installation.auth_token,
+        }
+        logger.debug(f"Data: {body}")
+
+        req = Request(
+            method="POST",
+            url=self.FCM_REGISTER_ENDPOINT_PATTERN.format(firebase_project_id),
+            headers=headers,
+            json=body,
+        )
+        resp_data = await self._do_request(req, retries)
+
+        fcm = AppCredentialsFcm.model_validate_json(resp_data.decode("utf-8"))
+
+        return keys, fcm
 
     async def gcm_check_in(
         self, credentials: Optional[AppCredentialsGcm] = None
@@ -210,43 +285,44 @@ class PullkinBase:
         logger.debug(f"Response:\n{resp}")
         return resp
 
-    @classmethod
-    def urlsafe_base64(cls, data):
-        """
-        base64-encodes data with -_ instead of +/ and removes all = padding.
-        also strips newlines
-
-        returns a string
-        """
-        res = urlsafe_b64encode(data).replace(b"=", b"")
-        return res.replace(b"\n", b"").decode("ascii")
-
     async def gcm_register(
         self,
         sender_id: str,
         app_id: str,
-        api_key: str,
-        android_cert,
-        app_name: str,
-        firebase_name: str,
-        retries=5,
+        api_key: str | None = None,
+        android_cert: str | None = None,
+        app_name: str = "org.chromium.linux",
+        firebase_project_id: str | None = None,
+        retries: int = 5,
         **_,
-    ):
+    ) -> AppCredentialsGcm:
         """
-        obtains a gcm token
+        Register to GCM.
 
-        app_id: app id as an integer
+        Firebase installation is optional and can be skipped if parameters are not provided.
+
+        sender_id: sender_id, required
+        app_id: app_id in the form of "1:123123:android"
+        api_key: api_key in the form of "AIzaSy..."
+        android_cert: android cert hash as a base64 string
+        app_name: package name, "org.chromium.linux" by default
+        firebase_project_id: firebase project name
         retries: number of failed requests before giving up
 
-        returns {"token": "...", "app_id": 123123, "android_id":123123,
-                 "security_token": 123123}
+        Returns AppCredentialsGcm
         """
         # contains android_id, security_token and more
         checkin_result = await self.gcm_check_in()
-        installation_result = await self.fcm_installation(
-            app_id, api_key, android_cert, app_name, firebase_name
-        )
         logger.debug(f"Check_in:\n{checkin_result}")
+
+        installation_result: FirebaseInstallation | None = None
+        if all((api_key, android_cert, app_name, firebase_project_id)):
+            installation_result = await self.fcm_installation(
+                app_id, api_key, android_cert, app_name, firebase_project_id
+            )
+        else:
+            logger.warning("Not all credentials provided, skip FCM installation")
+
         body = {
             "X-subtype": sender_id,
             "sender": sender_id,
@@ -254,15 +330,8 @@ class PullkinBase:
             "X-osv": "25",
             "X-cliv": "fcm-23.1.1",
             "X-gmsv": "231114044",
-            "X-appid": installation_result.fid,
             "X-scope": "*",
-            "X-Goog-Firebase-Installations-Auth": installation_result.auth_token,
             "X-gmp_app_id": app_id,
-            "X-firebase-app-name-hash": (
-                base64.b64encode(hashlib.sha1(app_name.encode()).digest())
-                .decode("utf-8")
-                .rstrip("=")
-            ),
             "X-app_ver_name": "1.1.1.1",
             "app": app_name,
             "device": checkin_result.android_id,
@@ -272,6 +341,17 @@ class PullkinBase:
             "cert": android_cert,
             "target_ver": "28",
         }
+
+        if installation_result is not None:
+            body |= {
+                "X-Goog-Firebase-Installations-Auth": installation_result.auth_token,
+                "X-appid": installation_result.fid,
+                "X-firebase-app-name-hash": (
+                    base64.b64encode(hashlib.sha1(app_name.encode()).digest())
+                    .decode("utf-8")
+                    .rstrip("=")
+                ),
+            }
 
         headers = {
             "app": app_name,
@@ -284,12 +364,14 @@ class PullkinBase:
         }
 
         logger.debug(f"Data:\n{urlencode(body)}")
+
         req = Request(
             method="POST",
             url=self.REGISTER_URL,
             headers=headers,
             data=body,
         )
+
         for _ in range(retries):
             resp_data = await self._do_request(req, retries)
 
@@ -310,69 +392,66 @@ class PullkinBase:
             logger.debug(f"Gcm register return data {gcm_credentials}")
 
             return gcm_credentials
-        raise ValueError("Register error")
 
-    async def fcm_register(self, sender_id: Union[str, int], token, retries=5):
-        """
-        generates key pair and obtains a fcm token
-
-        sender_id: sender id as an integer
-        token: the subscription token in the dict returned by gcm_register
-
-        returns {"keys": keys, "fcm": {...}}
-        """
-        # I used this analyzer to figure out how to slice the asn1 structs
-        # https://lapo.it/asn1js
-        # first byte of public key is skipped for some reason
-        # maybe it's always zero
-        public, private = generate_pair("ec", curve=self.unicode("secp256r1"))
-        from base64 import b64encode
-
-        logger.debug("# Public")
-        logger.debug(b64encode(public.asn1.dump()))
-        logger.debug("# Private")
-        logger.debug(b64encode(private.asn1.dump()))
-        keys = {
-            "public": self.urlsafe_base64(public.asn1.dump()[26:]),
-            "private": self.urlsafe_base64(private.asn1.dump()),
-            "secret": self.urlsafe_base64(os.urandom(16)),
-        }
-        body = {
-            "authorized_entity": int(sender_id),
-            "endpoint": "{}/{}".format(self.FCM_ENDPOINT, token),
-            "encryption_key": keys["public"],
-            "encryption_auth": keys["secret"],
-        }
-        logger.debug(f"Data:\n{body}")
-        req = Request(method="POST", url=self.FCM_SUBSCRIBE, data=body)
-        resp_data = await self._do_request(req, retries)
-        return {"keys": keys, "fcm": json.loads(resp_data.decode("utf-8"))}
+        raise ValueError(f"Register error after {retries=}")
 
     async def register(
         self,
         sender_id: Union[str, int],
         app_id: str,
         api_key: str,
-        firebase_name: str,
+        firebase_project_id: str,
         android_cert: str = "da39a3ee5e6b4b0d3255bfef95601890afd80709",
         app_name: str = "org.chromium.linux",
+        retries: int = 5,
     ) -> AppCredentials:
-        """register gcm and fcm tokens for sender_id"""
-        gcm_result = await self.gcm_register(
+        """
+        Register in GCM and FCM.
+
+        Firebase installation is optional and can be skipped if parameters are not provided.
+
+        FCM subscription may contain `AppCredentials.fcm.error` if not compatible.
+
+        sender_id: sender_id, required
+        app_id: app_id in the form of "1:123123:android"
+        api_key: api_key in the form of "AIzaSy..."
+        android_cert: android cert hash as a base64 string
+        app_name: package name, "org.chromium.linux" by default
+        firebase_project_id: firebase project name
+        retries: number of failed requests before giving up
+
+        Returns AppCredentialsGcm
+        """
+        gcm = await self.gcm_register(
             sender_id=str(sender_id),
             app_id=app_id,
             api_key=api_key,
             android_cert=android_cert,
             app_name=app_name,
-            firebase_name=firebase_name,
+            firebase_project_id=firebase_project_id,
+            retries=retries,
         )
-        logger.debug(f"GCM subscription data: {gcm_result}")
-        fcm = await self.fcm_register(sender_id=sender_id, token=gcm_result.token)
-        logger.debug(f"FCM subscription data: {fcm}")
-        res = {"gcm": gcm_result}
-        res.update(fcm)
+        logger.debug(f"GCM subscription data: {gcm}")
 
-        return AppCredentials.model_validate(res)
+        if gcm.installation is not None:
+            keys, fcm = await self.new_fcm_register(
+                gcm_token=gcm.token,
+                api_key=api_key,
+                firebase_project_id=firebase_project_id,
+                firebase_installation=gcm.installation,
+                retries=retries,
+            )
+        else:
+            keys = fcm = None
+
+        # keys, fcm = await self.fcm_register(sender_id=sender_id, gcm_token=gcm.token)
+        logger.debug(f"FCM subscription data: {fcm}")
+
+        return AppCredentials(
+            gcm=gcm,
+            fcm=fcm,
+            keys=keys,
+        )
 
     @classmethod
     def _encode_varint32(cls, x):

@@ -1,9 +1,9 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import BaseModel, BeforeValidator
 
 
-class FirebaseInstallationResponse(BaseModel):
+class FirebaseInstallation(BaseModel):
     name: str
     fid: str
     refresh_token: str
@@ -18,14 +18,21 @@ class CheckInResponse(BaseModel):
 class AppCredentialsGcm(BaseModel):
     token: str
     app_id: str
-    android_id: Annotated[str, BeforeValidator(lambda x: str(x))]
-    security_token: Annotated[str, BeforeValidator(lambda x: str(x))]
-    installation: FirebaseInstallationResponse
+    android_id: Annotated[str, BeforeValidator(lambda x: str(x))]  # type: ignore
+    security_token: Annotated[str, BeforeValidator(lambda x: str(x))]  # type: ignore
+    installation: FirebaseInstallation | None = None
+
+
+class AppCredentialsFcmError(BaseModel):
+    code: int
+    message: str
+    status: str
 
 
 class AppCredentialsFcm(BaseModel):
+    name: str
     token: str
-    pushSet: str
+    web: dict[str, str]
 
 
 class AppCredentialsKeys(BaseModel):
@@ -36,5 +43,5 @@ class AppCredentialsKeys(BaseModel):
 
 class AppCredentials(BaseModel):
     gcm: AppCredentialsGcm
-    fcm: AppCredentialsFcm
-    keys: AppCredentialsKeys
+    fcm: AppCredentialsFcm | None = None
+    keys: AppCredentialsKeys | None = None
