@@ -92,7 +92,7 @@ class Message(BaseModel, Generic[NotificationDataType]):
 
         if generic_metadata:
             message_model = generic_metadata.get("origin") or Message
-            notification_model = generic_metadata.get("args", (None,))[0]
+            notification_model = (generic_metadata.get("args") or (None,))[0]
 
             if notification_model:
                 return message_model[notification_model].model_validate(self.raw)

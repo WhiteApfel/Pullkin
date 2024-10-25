@@ -20,7 +20,7 @@ from tests.testdata import (
 async def test_aio_receive(fcm: FirebaseAdmin):
     client = Pullkin()
     fcm_cred = await client.register(
-        SENDER_ID, APP_ID, API_KEY, FIREBASE_NAME, ANDROID_CERT, APP_NAME
+        SENDER_ID, APP_ID, API_KEY, FIREBASE_NAME
     )
 
     @client.on_notification()
