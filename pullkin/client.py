@@ -7,7 +7,7 @@ import uuid
 from base64 import urlsafe_b64decode
 from binascii import hexlify
 from functools import wraps
-from typing import AsyncGenerator, Awaitable, Callable, Optional, Any, TypeVar
+from typing import Any, AsyncGenerator, Awaitable, Callable, Optional, TypeVar
 
 import cryptography.hazmat.primitives.serialization as serialization
 import http_ece
@@ -337,7 +337,10 @@ class Pullkin(PullkinCore):
             raise
 
     async def add_app(
-        self, sender_id: str, credentials: AppCredentials, persistent_ids: set[str] | None = None
+        self,
+        sender_id: str,
+        credentials: AppCredentials,
+        persistent_ids: set[str] | None = None,
     ) -> None:
         """
         Subscribe a device to a specific app.

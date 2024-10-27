@@ -25,8 +25,16 @@ from pullkin.models.credentials import (
 )
 from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuildProto
 from pullkin.proto.checkin_proto import AndroidCheckinRequest, AndroidCheckinResponse
-from pullkin.proto.mcs_proto import HeartbeatPing, HeartbeatAck, LoginRequest, LoginResponse, Close, IqStanza, \
-    DataMessageStanza, StreamErrorStanza
+from pullkin.proto.mcs_proto import (
+    Close,
+    DataMessageStanza,
+    HeartbeatAck,
+    HeartbeatPing,
+    IqStanza,
+    LoginRequest,
+    LoginResponse,
+    StreamErrorStanza,
+)
 
 logger.disable("pullkin")
 
@@ -48,6 +56,7 @@ class PullkinCore:
     This class contains all the underlying methods for GCM and FCM registration.
     However, users should usually only care about the Pullkin.register() method.
     """
+
     unicode = str
 
     SERVER_KEY = (
