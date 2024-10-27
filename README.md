@@ -7,27 +7,32 @@
 ![GitHub last commit](https://img.shields.io/github/last-commit/whiteapfel/pullkin)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pullkin)
 
-Like Pushkin, but subscribe to FCM (GCM) and receive notifications
+Like Alexander Pushkin, but subscribe to FCM (GCM) and receive notifications
 
-My alternative implementation 
-of [python implementation](https://github.com/Francesco149/push_receiver) 
-of [JS implementation](https://github.com/MatthieuLemoine/push-receiver)
+An alternative asynchronous implementation in Python 
+of [Francesco's Python implementation](https://github.com/Francesco149/push_receiver) 
+and [Matthieu Lemoine's JavaScript implementation](https://github.com/MatthieuLemoine/push-receiver).
 
-Tested on python (3.6, 3.8, 3.10, pypy3.7-7.3.5)
+Tested on Python 3.12 (I'm sorry, but I'm too exhausted to test it on 3.10, 3.11 and PyPy)
 
-I almost didn't write anything to consider it my intellectual property, 
-just wrapped the code already written by Franc[e]sco in a design convenient for my own use 
-
-Note that for the listening part Franc[e]sco has to pull in http-ece which depends
-on a full-blown native crypto library rather than just oscrypto. it is
-an optional dependency, so you'll have to install it explicitly by depending
-on `pullkin[listen]`
+This library is not a wrapper, but a complete redesign of the Push Receiver by Franc[e]sco. 
+Although the core logic of the original implementation is reused,
+this project takes a different approach to the structure and design of the library.
 
 ## Differences
 
-* Add async listener
-* Add async listener-coroutine
-* Replace functions with class of listener
+* Implemented asynchronous listener
+* Implemented asynchronous coroutine-based listener
+* Added support for multiple apps
+* Utilized pydantic models for data representation
+* Replaced functions with a listener class
+
+## Docs
+
+For more information, please visit the [docs on Read the Docs](https://pullkin.readthedocs.io/en/latest/).
+The documentation contains more detailed information about usage, 
+examples of how to use Pullkin for different scenarios, 
+and provides a more comprehensive overview of the library.
 
 ## Usage
 
@@ -38,6 +43,9 @@ pip install pullkin
 ```
 
 ### How to use
+This example shows how to use the Pullkin library to receive push notifications.
+
+Note: in real-world applications, you should use a secure way to store your credentials.
 
 ```python
 import json
@@ -48,51 +56,64 @@ from pullkin import Pullkin
 from pullkin.models import Message, AppCredentials
 from pullkin.proto.mcs_proto import DataMessageStanza
 
+# Replace it with your actual values
 SENDER_ID = '<<SENDER_ID>>'  # '1234567890'
 # ANOTHER_SENDER_ID = '<<SENDER_ID>>'  # '1234567890'
 APP_ID = '<<APP_ID>>'  # '1:1234567890:android:abcdef1234567890'
 API_ID = '<<API_ID>>'  # 'AIzaSyDce4zFw4CqLqW2eCOqTbXfDx9a8mRnLpI'
-FIREBASE_NAME = '<<FIREBASE_NAME'  # 'pullkin-example'
-APP_NAME = '<<APP_NAME>>'  # 'cc.pullkin.example'
-
-#
-ANDROID_CERT = 'da39a3ee5e6b4b0d3255bfef95601890afd80709'  
-# 'da39a3ee5e6b4b0d3255bfef95601890afd80709' is default hash
+FIREBASE_NAME = '<<FIREBASE_NAME>>'  # 'pullkin-example'
+ANDROID_CERT = '<<ANDROID_CERT>>'  # 'da39a3ee5e6b4b0d3255bfef95601890afd80709' - default
+APP_NAME = '<<APP_NAME>>'  # 'cc.pullkin.example' - default
 
 pullkin = Pullkin()
 
-if not os.path.exists('.persistent_ids.txt'):
-    with open('.persistent_ids.txt', 'w+') as f:
-        ...
+# See https://pullkin.readthedocs.io/en/latest/API/modules/#pullkin.core.PullkinCore.register for more information
+async def register_app(sender_id: str, app_id: str, api_id: str, firebase_name: str, android_cert: str, app_name: str):
+    """
+    Registers an app with Pullkin.
 
-with open(".persistent_ids.txt", "r") as f:
-    received_persistent_ids = [x.strip() for x in f]
-
-
-@pullkin.on_notification()
-async def on_notification(message: Message, data_message: DataMessageStanza):
-    idstr = data_message.persistent_id + "\n"
-    with open(".persistent_ids.txt", "r") as f:
-        if idstr in f:
-            return
-    with open(".persistent_ids.txt", "a") as f:
-        f.write(idstr)
-    print(message.notification)
-
-
-async def main():
+    :param sender_id: The sender ID of your app. Can be found in the Firebase
+        console, in the "Cloud Messaging" section.
+    :param app_id: The ID of your app. Can be found in the Firebase console,
+        in the "General" section.
+    :param api_id: The API key of your app. Can be found in the Google Cloud
+        console, in the "APIs & Services" > "Dashboard" section.
+    :param firebase_name: The name of your Firebase project. Can be found in the
+        Firebase console, in the "General" section.
+    :param android_cert: The SHA-1 hash of your app's certificate. Can be found
+        in the Google Play console, in the "Release management" > "App signing"
+        section.
+    :param app_name: The name of your app. Can be found in the Google Play console,
+        in the "Store listing" section.
+    :return: The credentials of the registered app
+    """
     if not os.path.exists('.pullkin_app_credentials'):
         with open('.pullkin_app_credentials', 'w+') as f:
-            credentials = await pullkin.register(SENDER_ID, APP_ID, API_ID, FIREBASE_NAME, ANDROID_CERT,  APP_NAME)
+            credentials = await pullkin.register(sender_id, app_id, api_id, firebase_name, android_cert, app_name)
             f.write(json.dumps(credentials.model_dump(mode="json")))
     else:
         with open('.pullkin_app_credentials', 'r') as f:
             credentials = AppCredentials.model_validate(json.loads(f.read()))
-    
-    await pullkin.add_app(sender_id=SENDER_ID, credentials=credentials, persistent_ids=received_persistent_ids)
-    # await pullkin.add_app(sender_id=ANOTHER_SENDER_ID, credentials=another_credentials, persistent_ids=another_received_persistent_ids)
-    
-    
+    return credentials
+
+
+@pullkin.on_notification()
+async def on_notification(notification: Message, data_message: DataMessageStanza):
+    print(notification, data_message)
+
+
+async def main():
+    # Register the app and get the credentials
+    credentials = await register_app(SENDER_ID, APP_ID, API_ID, FIREBASE_NAME, ANDROID_CERT, APP_NAME)
+
+    # See https://pullkin.readthedocs.io/en/latest/#adding-an-app for more information
+    await pullkin.add_app(sender_id=SENDER_ID, credentials=credentials)
+
+    # Add another app if it is necessary
+    # credentials = await register_app(ANOTHER_SENDER_ID, ANOTHER_APP_ID, ANOTHER_API_ID, ANOTHER_FIREBASE_NAME, ANOTHER_ANDROID_CERT, ANOTHER_APP_NAME)
+    # await pullkin.add_app(sender_id=ANOTHER_SENDER_ID, credentials=credentials)
+
+    # See https://pullkin.readthedocs.io/en/latest/API/modules/#pullkin.Pullkin.run for more information
     await pullkin.run()
 
 
