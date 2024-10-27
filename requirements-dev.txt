@@ -1,4 +1,4 @@
-firebase_admin==6.1.0
-pytest>=6.2.5
-pytest-asyncio>=0.16.0
-setuptools==67.6.0
+firebase_admin==6.5.0
+pytest>=8.3.3
+pytest-asyncio>=0.24.0
+setuptools>=75.2.0
