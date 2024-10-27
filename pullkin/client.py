@@ -6,7 +6,7 @@ import struct
 import uuid
 from base64 import urlsafe_b64decode
 from binascii import hexlify
-from typing import Any, AsyncGenerator, Awaitable, Callable, Optional, Union
+from typing import AsyncGenerator, Awaitable, Callable, Optional, Union
 
 import cryptography.hazmat.primitives.serialization as serialization
 import http_ece
@@ -37,16 +37,18 @@ class Pullkin(PullkinCore):
         ] = lambda *a, **k: True,
     ):
         """
-        Decorator
+        Registers a new callback with a filter rule to trigger this callback.
 
-        Registers a new callback with filter rule to trigger this callback
+        Args:
+            handler_filter: A callable object that filters notifications.
+                It takes two parameters: the message and the data message stanza.
+                If the callable returns True, the callback will be triggered.
 
-        First param to be passed into filter or callback: some object. Now is empty dict.
-        Later you will be able to passed your object
-        Second param: Notification object. You can read about Notification here: TODO: add a link
-        Third param: Message object that get from socket. With all data about message. Read hereL TODO: add a link
+        Returns:
+            A decorator that registers the callback.
 
-        :: python code
+        Examples:
+            ```python
             from pullkin import Pullkin, Message, DataMessageStanza
             pullkin = AuiPullkin()
 
@@ -60,7 +62,7 @@ class Pullkin(PullkinCore):
                 print(message.notification)
                 await asyncio.sleep(2)
                 print("=-)")
-
+            ```
         """
 
         def decorator(
@@ -268,24 +270,37 @@ class Pullkin(PullkinCore):
         sender_id: int | str | None = None,
     ) -> AsyncGenerator[Message | None, None]:
         """
-        Return a listener-coroutine
+        Creates a coroutine to listen for push notifications.
 
-        Every coroutine iteration is one received push
-        (or not, because it starts reading and waiting for data on socket)
+        This coroutine yields a received push notification on each iteration. If no notification
+        is available, it waits for data on the socket.
 
-        You can use coroutines like this, for example:
+        Args:
+            sender_id (int | str | None): The sender ID to filter notifications for.
+            If None, listen to all notifications.
 
-        :: python code
-            # <some code>
+        Returns:
+            AsyncGenerator[Message | None, None]: An asynchronous generator that yields each
+            received push notification message, or None if no notification is received.
 
-            await coroutine.asend(None)  # One push will be received and distributed
+        Yields:
+            Message | None: A received push notification message, or None if no notification is received.
 
-            # <some code>
+        Example:
+            ```python
+            # Perform some initial setup...
 
-            for _ in range(10): # Ten pushes will be received
+            # Receive and distribute one push notification.
+            await coroutine.asend(None)
+
+            # Perform some other tasks...
+
+            # Receive and distribute ten push notifications.
+            for _ in range(10):
                 await coroutine.asend(None)
 
-            # <some code>
+            # Perform some final tasks...
+            ```
         """
         # TODO: add docs
         coroutine = self.__listen_coroutine(sender_id)
@@ -301,7 +316,7 @@ class Pullkin(PullkinCore):
     async def _run_listener(
         self,
         sender_id: str,
-        timer: Union[int, float] = 0.05,
+        timer: int | float = 0.05,
     ) -> None:
         if not (self.apps[sender_id].reader or self.apps[sender_id].writer):
             await self.__open_connection(sender_id)
@@ -316,60 +331,38 @@ class Pullkin(PullkinCore):
             await self.close()
         except:  # noqa: E722
             logger.exception("Error while listen:")
-            raise
-        finally:
             await self.close()
+            raise
 
     async def add_app(
         self, sender_id: str, credentials: AppCredentials, persistent_ids: set[str]
     ):
         """
-        Subscribe device to app
+        Subscribe a device to a specific app.
+
+        This method is used to subscribe a device to a specific app,
+        allowing it to receive notifications from that app.
 
         Args:
-            sender_id:
-            credentials:
-            persistent_ids:
+            sender_id (str): The sender ID of the app.
+            credentials (AppCredentials): The credentials for the app.
+            persistent_ids (set[str]): The persistent IDs for the app.
 
         Returns:
-
+            None
         """
-        if persistent_ids is None:
-            persistent_ids = set()
+        sender_id = self._normalize_sender_id(sender_id)
+        credentials = self._get_or_validate_credentials(sender_id, credentials)
+        persistent_ids = self._normalize_persistent_ids(persistent_ids)
 
-        if isinstance(sender_id, int):
-            sender_id = str(sender_id)
-
-        if credentials is None:
-            if sender_id is not None and sender_id in self.apps:
-                credentials = self.apps[sender_id].credentials
-            elif sender_id is None and len(self.apps) == 1:
-                credentials = self.apps.get(list(self.apps.keys())[0]).credentials
-        else:
-            if sender_id is not None:
-                self.apps.setdefault(
-                    sender_id,
-                    PullkinAppData(
-                        credentials=None,
-                        persistent_ids=set(),
-                        is_started=False,
-                        reader=None,
-                        writer=None,
-                        listener=None,
-                    ),
-                )
-                self.apps[sender_id].credentials = credentials
-
-        if credentials is None:
-            raise ValueError("Credentials is None. See docs ")  # TODO: add link
+        self._setup_app_data(sender_id, credentials, persistent_ids)
 
         task = asyncio.create_task(
             self._listen_start(sender_id, credentials, persistent_ids)
         )
         try:
-            await asyncio.wait_for(self._wait_start(sender_id), timeout=10)
+            await self._wait_for_app_to_start(sender_id, task)
         except asyncio.exceptions.TimeoutError:
-            task.cancel()
             logger.error("Timeout subscribe device to app 10s")
         except (KeyboardInterrupt, asyncio.CancelledError):
             return
@@ -377,19 +370,68 @@ class Pullkin(PullkinCore):
             logger.exception("Wait start error:")
             raise
 
+    @staticmethod
+    def _normalize_sender_id(sender_id: str | int) -> str:
+        return str(sender_id)
+
+    @staticmethod
+    def _normalize_persistent_ids(persistent_ids: set[str] | None) -> set[str]:
+        return persistent_ids or set()
+
+    def _get_or_validate_credentials(
+        self, sender_id: str, credentials: AppCredentials | None
+    ) -> AppCredentials:
+        if credentials is None:
+            if sender_id in self.apps:
+                return self.apps[sender_id].credentials
+            elif len(self.apps) == 1:
+                return self.apps.get(list(self.apps.keys())[0]).credentials
+        return credentials
+
+    def _setup_app_data(
+        self, sender_id: str, credentials: AppCredentials, persistent_ids: set[str]
+    ) -> None:
+        if sender_id not in self.apps:
+            self.apps[sender_id] = PullkinAppData(
+                credentials=credentials,
+                persistent_ids=persistent_ids,
+                is_started=False,
+                reader=None,
+                writer=None,
+                listener=None,
+            )
+        else:
+            self.apps[sender_id].credentials = credentials
+            self.apps[sender_id].persistent_ids = persistent_ids
+
+        if credentials is None:
+            raise ValueError("Credentials is None. See docs")  # TODO: add link
+
+    async def _wait_for_app_to_start(self, sender_id: str, task: asyncio.Task) -> None:
+        try:
+            await asyncio.wait_for(self._wait_start(sender_id), timeout=10)
+        except asyncio.exceptions.TimeoutError:
+            task.cancel()
+
     async def run(
         self,
         sender_ids: list[str] | None = None,
-        timer: Union[int, float] = 0.05,
+        timer: int | float = 0.05,
     ) -> None:
         """
-        Listens for push notifications
+        Listens for push notifications in the background.
 
-        Runs an endless loop for reading notifications and distributing among callbacks based on filter results
+        This method runs an endless loop that reads incoming notifications and
+        distributes them among registered callbacks based on filter results.
 
         Args:
-            sender_ids: sender_ids to listening in background
-            timer: timer in seconds between receive-iteration
+            sender_ids: A list of sender IDs to listen for notifications from.
+                If None, all registered sender IDs will be listened to.
+            timer: The time interval in seconds between each receive iteration.
+                Defaults to 0.05 seconds.
+
+        Returns:
+            None
         """
         # TODO: add docs
 
@@ -426,6 +468,16 @@ class Pullkin(PullkinCore):
         del self.apps[sender_id]
 
     async def close(self, sender_id: str | None = None):
+        """
+        Closes the connection for the specified sender ID or all sender IDs if `None` is provided.
+
+        Args:
+            sender_id (str | None): The sender ID to close the connection for. If `None`, all sender IDs will be closed.
+
+        Returns:
+            None
+
+        """
         if sender_id is None:
             for sender_id in self.apps:
                 await self._close_app(sender_id)

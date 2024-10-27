@@ -5,3 +5,4 @@ from pullkin.models.credentials import (
     AppCredentialsKeys,
 )
 from pullkin.models.message import Message, NotificationData
+from pullkin.models.service import *
