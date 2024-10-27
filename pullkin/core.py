@@ -25,7 +25,8 @@ from pullkin.models.credentials import (
 )
 from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuildProto
 from pullkin.proto.checkin_proto import AndroidCheckinRequest, AndroidCheckinResponse
-from pullkin.proto.mcs_proto import *  # noqa: F403
+from pullkin.proto.mcs_proto import HeartbeatPing, HeartbeatAck, LoginRequest, LoginResponse, Close, IqStanza, \
+    DataMessageStanza, StreamErrorStanza
 
 logger.disable("pullkin")
 
@@ -287,7 +288,7 @@ class PullkinCore:
             payload.id = int(credentials.android_id)
             payload.security_token = int(credentials.security_token)
 
-        logger.debug(f"Payload:\n{payload}")
+        logger.debug(f"Payload: \n{payload}")
         req = self.http_client.build_request(
             method="POST",
             url=self.CHECKIN_URL,
@@ -298,7 +299,7 @@ class PullkinCore:
         resp_data = await self._do_request(req)
         resp = AndroidCheckinResponse()
         resp.parse(resp_data)
-        logger.debug(f"Response:\n{resp}")
+        logger.debug(f"Response: \n{resp}")
         return resp
 
     async def gcm_register(
@@ -330,7 +331,7 @@ class PullkinCore:
         """
         # contains android_id, security_token and more
         checkin_result = await self.gcm_check_in()
-        logger.debug(f"Check_in:\n{checkin_result}")
+        logger.debug(f"Check_in: \n{checkin_result}")
 
         installation_result: FirebaseInstallation | None = None
         if all((api_key, android_cert, app_name, firebase_project_id)):

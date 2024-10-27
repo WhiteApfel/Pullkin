@@ -6,17 +6,18 @@ import struct
 import uuid
 from base64 import urlsafe_b64decode
 from binascii import hexlify
-from typing import AsyncGenerator, Awaitable, Callable, Optional, Union
+from typing import AsyncGenerator, Awaitable, Callable, Optional, Any
 
 import cryptography.hazmat.primitives.serialization as serialization
 import http_ece
 from cryptography.hazmat.backends import default_backend
 from loguru import logger
 
+from pullkin import DataMessageStanza
 from pullkin.core import PullkinAppData, PullkinCore
 from pullkin.models import AppCredentials
 from pullkin.models.message import Message, NotificationData
-from pullkin.proto.mcs_proto import *  # noqa: F403
+from pullkin.proto.mcs_proto import LoginRequest, Setting
 
 logger.disable("pullkin")
 

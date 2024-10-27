@@ -1,1 +1,1 @@
-from pullkin.models.service.responses import CheckinResponse, GcmRegisterResponse
+from pullkin.models.service.responses import CheckinResponse, GcmRegisterResponse   # noqa: F401
