@@ -2,7 +2,7 @@
 # sources: mcs.proto
 # plugin: python-betterproto
 from dataclasses import dataclass
-from typing import List, Any
+from typing import Any, List
 
 import betterproto
 

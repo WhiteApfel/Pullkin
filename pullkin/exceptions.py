@@ -1,6 +1,3 @@
-from httpx import Response
-
-
 class PullkinError(Exception):
     def __init__(self, message):
         self.message = message
@@ -9,6 +6,7 @@ class PullkinError(Exception):
 class PullkinResponseError(PullkinError):
     def __init__(self, message):
         super().__init__(message)
+
 
 class PullkinRegistrationRetriesError(PullkinError):
     def __init__(self, message, errors: list[PullkinResponseError]):

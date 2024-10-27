@@ -5,9 +5,8 @@ import json
 import os
 import secrets
 import time
-
 from asyncio import StreamReader, StreamWriter, Task
-from base64 import urlsafe_b64encode, b64encode
+from base64 import b64encode, urlsafe_b64encode
 from dataclasses import dataclass, field
 from typing import Optional, Union
 from urllib.parse import urlencode
@@ -17,9 +16,13 @@ from loguru import logger
 from oscrypto.asymmetric import generate_pair
 from pydantic import ValidationError
 
-from pullkin.exceptions import PullkinResponseError, PullkinRegistrationRetriesError
+from pullkin.exceptions import PullkinRegistrationRetriesError, PullkinResponseError
 from pullkin.models import AppCredentials, AppCredentialsGcm
-from pullkin.models.credentials import FirebaseInstallation, AppCredentialsKeys, AppCredentialsFcm
+from pullkin.models.credentials import (
+    AppCredentialsFcm,
+    AppCredentialsKeys,
+    FirebaseInstallation,
+)
 from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuildProto
 from pullkin.proto.checkin_proto import AndroidCheckinRequest, AndroidCheckinResponse
 from pullkin.proto.mcs_proto import *  # noqa: F403
@@ -54,7 +57,9 @@ class PullkinCore:
     FCM_INSTALLATION_ENDPOINT_PATTERN = (
         "https://firebaseinstallations.googleapis.com/v1/projects/{}/installations"
     )
-    FCM_REGISTER_ENDPOINT_PATTERN = "https://fcmregistrations.googleapis.com/v1/projects/{}/registrations"
+    FCM_REGISTER_ENDPOINT_PATTERN = (
+        "https://fcmregistrations.googleapis.com/v1/projects/{}/registrations"
+    )
 
     PUSH_HOST = "mtalk.google.com"
     PUSH_PORT = 5228
@@ -228,7 +233,6 @@ class PullkinCore:
                 "auth": keys.secret,
                 "endpoint": f"{self.FCM_ENDPOINT}/{gcm_token}",
                 "p256dh": keys.public,
-
             },
         }
         headers = {
@@ -249,7 +253,9 @@ class PullkinCore:
             fcm = AppCredentialsFcm.model_validate_json(resp_data)
         except ValidationError as e:
             logger.exception(e)
-            raise PullkinResponseError(f"Failed to parse FCM response: {resp_data}") from e
+            raise PullkinResponseError(
+                f"Failed to parse FCM response: {resp_data}"
+            ) from e
 
         return keys, fcm
 
@@ -383,13 +389,11 @@ class PullkinCore:
             data=body,
         )
 
-
         resp_data = await self._do_request(req, retries, decode=True)
 
         if "Error" in resp_data:
             logger.error(f"Register request has failed with {resp_data}")
             raise PullkinResponseError(f"GCM registration error: {resp_data}")
-
 
         token = resp_data.split("=")[1]
 
@@ -473,7 +477,9 @@ class PullkinCore:
                 errors.append(e)
                 continue
 
-        raise PullkinRegistrationRetriesError(f"Failed to register after {retries} retries", errors)
+        raise PullkinRegistrationRetriesError(
+            f"Failed to register after {retries} retries", errors
+        )
 
     @classmethod
     def _encode_varint32(cls, x):

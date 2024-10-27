@@ -19,9 +19,7 @@ from tests.testdata import (
 @pytest.mark.asyncio
 async def test_aio_receive(fcm: FirebaseAdmin):
     client = Pullkin()
-    fcm_cred = await client.register(
-        SENDER_ID, APP_ID, API_KEY, FIREBASE_NAME
-    )
+    fcm_cred = await client.register(SENDER_ID, APP_ID, API_KEY, FIREBASE_NAME)
 
     await client.add_app(SENDER_ID, fcm_cred, [])
     coroutine = await client.listen_coroutine(SENDER_ID)

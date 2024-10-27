@@ -2,8 +2,6 @@ from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from pullkin.proto.mcs_proto import AppData
-
 
 class NotificationData(BaseModel):
     """
@@ -88,7 +86,7 @@ class Message(BaseModel, Generic[NotificationDataType]):
             # or use simple
             my_message: MyMessage[MyNotificationData] = MyMessage[MyNotificationData].model_validate(message.raw)
         """
-        generic_metadata = getattr(another_model, '__pydantic_generic_metadata__', None)
+        generic_metadata = getattr(another_model, "__pydantic_generic_metadata__", None)
 
         if generic_metadata:
             message_model = generic_metadata.get("origin") or Message

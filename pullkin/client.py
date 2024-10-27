@@ -6,14 +6,14 @@ import struct
 import uuid
 from base64 import urlsafe_b64decode
 from binascii import hexlify
-from typing import AsyncGenerator, Awaitable, Callable, Optional, Union
+from typing import Any, AsyncGenerator, Awaitable, Callable, Optional, Union
 
 import cryptography.hazmat.primitives.serialization as serialization
 import http_ece
 from cryptography.hazmat.backends import default_backend
 from loguru import logger
 
-from pullkin.core import PullkinCore, PullkinAppData
+from pullkin.core import PullkinAppData, PullkinCore
 from pullkin.models import AppCredentials
 from pullkin.models.message import Message, NotificationData
 from pullkin.proto.mcs_proto import *  # noqa: F403
@@ -66,7 +66,7 @@ class Pullkin(PullkinCore):
         def decorator(
             callback: Callable[
                 [Optional[Message], DataMessageStanza], Optional[Awaitable]
-            ]
+            ],
         ):
             self.on_notification_handlers.append(
                 {"callback": callback, "filter": handler_filter}
@@ -76,9 +76,15 @@ class Pullkin(PullkinCore):
         return decorator
 
     @staticmethod
-    async def _process_handler(handler, message: Message, data_message: DataMessageStanza) -> None:
+    async def _process_handler(
+        handler, message: Message, data_message: DataMessageStanza
+    ) -> None:
         for field, annotation in handler["callback"].__annotations__.items():
-            if field != "return" and issubclass(annotation, Message) and message is not None:
+            if (
+                field != "return"
+                and issubclass(annotation, Message)
+                and message is not None
+            ):
                 message = message.to_another_model(annotation)
         if inspect.iscoroutinefunction(handler["callback"]):
             await handler["callback"](message, data_message)
@@ -249,7 +255,9 @@ class Pullkin(PullkinCore):
             raise
         self.apps[sender_id].is_started = True
 
-    async def __listen_coroutine(self, sender_id: str) -> AsyncGenerator[Message | None, None]:
+    async def __listen_coroutine(
+        self, sender_id: str
+    ) -> AsyncGenerator[Message | None, None]:
         while True:
             yield await self.__listen_once(sender_id)
             if not self.apps[sender_id].is_started:
@@ -285,7 +293,8 @@ class Pullkin(PullkinCore):
 
     async def _wait_start(self, sender_id: str):
         while not all(
-            self.apps[sender_id].__getattribute__(i) for i in ["is_started", "reader", "writer"]
+            self.apps[sender_id].__getattribute__(i)
+            for i in ["is_started", "reader", "writer"]
         ):
             await asyncio.sleep(0.01)
 
@@ -347,7 +356,7 @@ class Pullkin(PullkinCore):
                         reader=None,
                         writer=None,
                         listener=None,
-                    )
+                    ),
                 )
                 self.apps[sender_id].credentials = credentials
 
