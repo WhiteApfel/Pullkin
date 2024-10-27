@@ -8,6 +8,7 @@ class NotificationData(BaseModel):
     You can create a child model that describes the fields you use in the notification.
 
     Example:
+        ```python
         class MyNotificationData(NotificationData):
             title: str
             body: str
@@ -15,6 +16,7 @@ class NotificationData(BaseModel):
             my_another_field: dict[str, str]
 
         message: Message[MyNotificationData] = ...
+        ```
     """
 
     model_config = ConfigDict(extra="allow")
@@ -44,13 +46,12 @@ class Message(BaseModel, Generic[NotificationDataType]):
     You can create a child model that describes the fields you use in the notification.
 
     Example:
-
-    :: python code
+        ```python
         class MyMessage(Message):
             my_field: str
 
         class MyMessageWithGeneric(Message[MyNotificationData]):
-
+        ```
     """
 
     model_config = ConfigDict(extra="allow")
@@ -73,9 +74,12 @@ class Message(BaseModel, Generic[NotificationDataType]):
     def to_another_model(self, another_model: MessageType) -> MessageType:
         """
         You can use this method to convert a Message-model to your model.
-        A Message will be converted into the another_model using another_model.model_validate(self.raw)
+        A Message will be converted into the another_model using `another_model.model_validate(self.raw)`
 
-        :: python code
+        If you use a handler with type hinting, the message model will be converted automatically.
+
+        Example: Example: Manually convert
+            ```python
             message: Message = ...
 
             my_message: Message[MyNotificationData] = message.to_another_model(Message[MyNotificationData])
@@ -85,6 +89,14 @@ class Message(BaseModel, Generic[NotificationDataType]):
 
             # or use simple
             my_message: MyMessage[MyNotificationData] = MyMessage[MyNotificationData].model_validate(message.raw)
+            ```
+
+        Example: Example: Auto convert with handler-style
+            ```python
+            @pullkin.on_notification()
+            async def on_notification(notification: MyMessage[MyNotificationData], data_message: DataMessageStanza):
+                print(notification)
+            ```
         """
         generic_metadata = getattr(another_model, "__pydantic_generic_metadata__", None)
 

@@ -28,6 +28,6 @@ I am grateful to everyone who contributed to the development of these projects.
 
 ## Useful Links
 
-- [Installation](./guide/install)
-- [Main Methods](./guide/methods)
-- [Usage Examples](./guide/examples)
+- [Installation](guide/install.md)
+- [Main Methods](guide/methods.md)
+- [Usage Examples](guide/examples.md)

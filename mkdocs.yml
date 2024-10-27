@@ -32,8 +32,8 @@ nav:
   - Main methods: guide/methods.md
   - Example: guide/examples.md
 - API:
-  - Modules (Модули): API/modules.md
-  - Types (Модели): API/types.md
+  - Modules: API/modules.md
+  - Types: API/types.md
 
 
 plugins:
@@ -42,12 +42,18 @@ plugins:
     handlers:
       python:
         options:
+          heading_level: 3
+          show_root_heading: True
+          parameter_headings: false
+          show_source: False
           docstring_style: google
           show_if_no_docstring: false
           members_order: source
-          show_symbol_type_heading: true
-          docstring_options:
-            ignore_init_summary: true
+          docstring_section_style: table
+
+##          show_symbol_type_heading: true
+#          docstring_options:
+#            ignore_init_summary: true
 
 markdown_extensions:
 - pymdownx.details

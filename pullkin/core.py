@@ -42,6 +42,12 @@ class PullkinAppData:
 
 
 class PullkinCore:
+    """
+    Core methods for GCM and FCM registration.
+
+    This class contains all the underlying methods for GCM and FCM registration.
+    However, users should usually only care about the Pullkin.register() method.
+    """
     unicode = str
 
     SERVER_KEY = (
@@ -111,7 +117,7 @@ class PullkinCore:
             self._http_client = None
 
     @classmethod
-    def urlsafe_base64(cls, data):
+    def _urlsafe_base64(cls, data):
         """
         base64-encodes data with -_ instead of +/ and removes all = padding.
         also strips newlines
@@ -161,6 +167,19 @@ class PullkinCore:
         app_package: str,
         firebase_project_id: str,
     ) -> FirebaseInstallation:
+        """
+        Performs FCM installation.
+
+        Args:
+            app_id (str): App ID of the Firebase app.
+            api_key (str): API key of the Firebase app.
+            android_cert (str): Android certificate of the Firebase app.
+            app_package (str): Package name of the app.
+            firebase_project_id (str): Firebase project ID of the app.
+
+        Returns:
+            The device installation data of the firebase app.
+        """
         data = {
             "fid": self.generate_fid(),
             "authVersion": "FIS_v2",
@@ -192,28 +211,32 @@ class PullkinCore:
             auth_token_expires_in=int(resp_data["authToken"]["expiresIn"][:-1]),
         )
 
-    async def new_fcm_register(
+    async def fcm_register(
         self,
         gcm_token: str,
         api_key: str,
         firebase_project_id: str,
         firebase_installation: FirebaseInstallation,
         retries: int = 5,
-        current_retry: int = 0,
     ) -> tuple[AppCredentialsKeys, AppCredentialsFcm]:
         """
-        Generates key pair and register a GCM token
+        Generates a key pair and registers a GCM token.
 
-        Register may return error in `AppCredentialsFcm.error`
-        Check `AppCredentialsFcm.is_success` for validate success result
-        Check `AppCredentialsFcm.error` for more details
+        This method may return an error in the `AppCredentialsFcm.error` field.
+        To validate the success of the registration, check the `AppCredentialsFcm.is_success` field.
+        For more details about the error, if any, check the `AppCredentialsFcm.error` field.
 
-        sender_id: sender_id
-        gcm_token: the subscription gcm_token returned by `Pullkin.gcm_register(...)`
+        Args:
+            gcm_token (str): The subscription GCM token returned by `Pullkin.gcm_register(...)`.
+            api_key (str): The API key for the Firebase project.
+            firebase_project_id (str): The ID of the Firebase project.
+            firebase_installation (FirebaseInstallation): The Firebase installation data.
+            retries (int, optional): The number of retries for the registration.
 
-        returns AppCredentialsKeys and AppCredentialsFcm
+        Returns:
+            A tuple containing the generated key pair and the FCM registration data.
         """
-        # I used this analyzer to figure out how to slice the asn1 structs
+        # Francesco152 used this analyzer to figure out how to slice the asn1 structs
         # https://lapo.it/asn1js
         # first byte of public key is skipped for some reason
         # maybe it's always zero
@@ -223,9 +246,9 @@ class PullkinCore:
         logger.debug(f"# Private key {b64encode(private.asn1.dump())}")
 
         keys = AppCredentialsKeys(
-            public=self.urlsafe_base64(public.asn1.dump()[26:]),
-            private=self.urlsafe_base64(private.asn1.dump()),
-            secret=self.urlsafe_base64(os.urandom(16)),
+            public=self._urlsafe_base64(public.asn1.dump()[26:]),
+            private=self._urlsafe_base64(private.asn1.dump()),
+            secret=self._urlsafe_base64(os.urandom(16)),
         )
 
         body = {
@@ -264,12 +287,17 @@ class PullkinCore:
         self, credentials: Optional[AppCredentialsGcm] = None
     ) -> AndroidCheckinResponse:
         """
-        perform check-in request
+        Perform a check-in request to obtain the android_id and security token.
 
-        android_id, security_token can be provided if we already did the initial
-        check-in
+        The android_id and security_token are required for the GCM registration,
+        and will be returned in the response.
 
-        returns dict with android_id, security_token and more
+        Args:
+            credentials (Optional[AppCredentialsGcm]): The credentials to use for the GCM check-in.
+                Required for first check-in.
+
+        Returns:
+            The response to the check-in request, containing the android_id, security_token and more.
         """
         chrome = ChromeBuildProto()
         chrome.platform = 3
@@ -307,27 +335,40 @@ class PullkinCore:
         sender_id: str,
         app_id: str,
         api_key: str | None = None,
+        firebase_project_id: str | None = None,
         android_cert: str | None = None,
         app_name: str = "org.chromium.linux",
-        firebase_project_id: str | None = None,
         retries: int = 5,
         current_retry: int = 0,
         **_,
     ) -> AppCredentialsGcm:
         """
-        Register to GCM.
+        Registers a device to GCM.
 
-        Firebase installation is optional and can be skipped if parameters are not provided.
+        This method performs the GCM device registration, which is a mandatory step
+        before a device can receive push notifications.
+        The method performs the following steps:
 
-        sender_id: sender_id, required
-        app_id: app_id in the form of "1:123123:android"
-        api_key: api_key in the form of "AIzaSy..."
-        android_cert: android cert hash as a base64 string
-        app_name: package name, "org.chromium.linux" by default
-        firebase_project_id: firebase project name
-        retries: number of failed requests before giving up
+        1. Performs a Chrome build check-in to obtain the Android ID and
+           security token.
+        2. Registers the device to GCM using the obtained Android ID and
+           security token.
 
-        Returns AppCredentialsGcm
+        The registration to Firebase is optional and can be skipped if the
+        required parameters are not provided.
+
+        Args:
+            sender_id (str): The Sender ID of the app.
+            app_id (str): The app ID in the form of "1:123123:android".
+            api_key (str): The API key in the form of "AIzaSy...".
+            firebase_project_id (str): The project ID of the Firebase project.
+            android_cert (str): The android cert hash as a base64 string.
+            app_name (str): The package name of the app.
+            retries (int): The number of failed requests before giving up.
+            current_retry (int): The current retry counts. Default to 0.
+
+        Returns:
+            The GCM registration data.
         """
         # contains android_id, security_token and more
         checkin_result = await self.gcm_check_in()
@@ -412,7 +453,7 @@ class PullkinCore:
 
     async def register(
         self,
-        sender_id: Union[str, int],
+        sender_id: str | int,
         app_id: str,
         api_key: str,
         firebase_project_id: str,
@@ -421,21 +462,25 @@ class PullkinCore:
         retries: int = 5,
     ) -> AppCredentials:
         """
-        Register in GCM and FCM.
+        Registers a device in GCM and FCM.
 
         Firebase installation is optional and can be skipped if parameters are not provided.
 
         FCM subscription may contain `AppCredentials.fcm.error` if not compatible.
 
-        sender_id: sender_id, required
-        app_id: app_id in the form of "1:123123:android"
-        api_key: api_key in the form of "AIzaSy..."
-        android_cert: android cert hash as a base64 string
-        app_name: package name, "org.chromium.linux" by default
-        firebase_project_id: firebase project name
-        retries: number of failed requests before giving up
+        Args:
+            sender_id (int | str): sender_id, required
+            app_id (str): app_id in the form of "1:123123:android"
+            api_key (str): api_key in the form of "AIzaSy..."
+            firebase_project_id (str): firebase project name
+            android_cert (str): android cert hash as a base64 string
+            app_name (str): package name, "org.chromium.linux" by default
+            retries (int): number of failed requests before giving up
 
-        Returns AppCredentialsGcm
+        Returns:
+            GCM and FCM data and keys.
+            If fcm registration fails,`AppCredentialsGcm.fcm.error`
+            will contain a PullkinResponseError with more details.
         """
         current_retry = 0
         errors: list[PullkinResponseError] = []
@@ -446,15 +491,15 @@ class PullkinCore:
                     sender_id=str(sender_id),
                     app_id=app_id,
                     api_key=api_key,
+                    firebase_project_id=firebase_project_id,
                     android_cert=android_cert,
                     app_name=app_name,
-                    firebase_project_id=firebase_project_id,
                     retries=retries,
                 )
                 logger.debug(f"GCM subscription data: {gcm}")
 
                 if gcm.installation is not None:
-                    keys, fcm = await self.new_fcm_register(
+                    keys, fcm = await self.fcm_register(
                         gcm_token=gcm.token,
                         api_key=api_key,
                         firebase_project_id=firebase_project_id,
@@ -464,7 +509,6 @@ class PullkinCore:
                 else:
                     keys = fcm = None
 
-                # keys, fcm = await self.fcm_register(sender_id=sender_id, gcm_token=gcm.token)
                 logger.debug(f"FCM subscription data: {fcm}")
 
                 return AppCredentials(

@@ -133,5 +133,5 @@ await client.run(timer=0.1)
 ```
 
 For practical usage examples of these methods, 
-please refer to the [Usage Examples](/guide/examples) section, 
+please refer to the [Usage Examples](examples.md) section, 
 where you can find sample code demonstrating how to implement each method effectively.

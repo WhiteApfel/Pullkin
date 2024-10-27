@@ -6,20 +6,22 @@ import struct
 import uuid
 from base64 import urlsafe_b64decode
 from binascii import hexlify
-from typing import AsyncGenerator, Awaitable, Callable, Optional, Any
+from functools import wraps
+from typing import AsyncGenerator, Awaitable, Callable, Optional, Any, TypeVar
 
 import cryptography.hazmat.primitives.serialization as serialization
 import http_ece
 from cryptography.hazmat.backends import default_backend
 from loguru import logger
 
-from pullkin import DataMessageStanza
 from pullkin.core import PullkinAppData, PullkinCore
 from pullkin.models import AppCredentials
 from pullkin.models.message import Message, NotificationData
-from pullkin.proto.mcs_proto import LoginRequest, Setting
+from pullkin.proto.mcs_proto import DataMessageStanza, LoginRequest, Setting
 
 logger.disable("pullkin")
+
+T = TypeVar("T", bound=Callable[[Message | None, DataMessageStanza], Awaitable | None])
 
 
 class Pullkin(PullkinCore):
@@ -36,7 +38,7 @@ class Pullkin(PullkinCore):
         handler_filter: Callable[
             [Message, DataMessageStanza], None
         ] = lambda *a, **k: True,
-    ):
+    ) -> Callable[[T], T]:
         """
         Registers a new callback with a filter rule to trigger this callback.
 
@@ -48,7 +50,7 @@ class Pullkin(PullkinCore):
         Returns:
             A decorator that registers the callback.
 
-        Examples:
+        Example:
             ```python
             from pullkin import Pullkin, Message, DataMessageStanza
             pullkin = AuiPullkin()
@@ -66,11 +68,10 @@ class Pullkin(PullkinCore):
             ```
         """
 
+        @wraps
         def decorator(
-            callback: Callable[
-                [Optional[Message], DataMessageStanza], Optional[Awaitable]
-            ],
-        ):
+            callback: T,
+        ) -> T:
             self.on_notification_handlers.append(
                 {"callback": callback, "filter": handler_filter}
             )
@@ -278,11 +279,11 @@ class Pullkin(PullkinCore):
 
         Args:
             sender_id (int | str | None): The sender ID to filter notifications for.
-            If None, listen to all notifications.
+                If None, listen to all notifications.
 
         Returns:
-            AsyncGenerator[Message | None, None]: An asynchronous generator that yields each
-            received push notification message, or None if no notification is received.
+            An asynchronous generator that yields each
+                received push notification, or None if no notification is received.
 
         Yields:
             Message | None: A received push notification message, or None if no notification is received.
@@ -329,15 +330,15 @@ class Pullkin(PullkinCore):
                 await coroutine.asend(None)
                 await asyncio.sleep(timer)
         except (KeyboardInterrupt, asyncio.CancelledError):
-            await self.close()
+            await self.stop()
         except:  # noqa: E722
             logger.exception("Error while listen:")
-            await self.close()
+            await self.stop()
             raise
 
     async def add_app(
-        self, sender_id: str, credentials: AppCredentials, persistent_ids: set[str]
-    ):
+        self, sender_id: str, credentials: AppCredentials, persistent_ids: set[str] | None = None
+    ) -> None:
         """
         Subscribe a device to a specific app.
 
@@ -427,8 +428,8 @@ class Pullkin(PullkinCore):
 
         Args:
             sender_ids: A list of sender IDs to listen for notifications from.
-                If None, all registered sender IDs will be listened to.
-            timer: The time interval in seconds between each receive iteration.
+                If `None`, all registered via `add_app()` sender IDs will be listened to.
+            timer: The time interval in seconds between each receive-iteration.
                 Defaults to 0.05 seconds.
 
         Returns:
@@ -445,9 +446,6 @@ class Pullkin(PullkinCore):
     async def _close_app(self, sender_id: str):
         app_data = self.apps[sender_id]
 
-        if app_data.listener:
-            app_data.listener.cancel()
-
         if app_data.writer:
             try:
                 app_data.is_started = False
@@ -458,29 +456,33 @@ class Pullkin(PullkinCore):
                     ...  # noqa
                 app_data.writer = None
                 app_data.reader = None
-            except ConnectionResetError:
-                pass
-            except ssl.SSLError:
+            except (
+                ConnectionResetError,
+                ssl.SSLError,
+            ):
                 pass
             except:  # noqa: E722
                 logger.exception("Error during close Pullkin:")
                 raise
 
+        if app_data.listener:
+            app_data.listener.cancel()
+
         del self.apps[sender_id]
 
-    async def close(self, sender_id: str | None = None):
+    async def stop(self, sender_id: str | None = None) -> None:
         """
         Closes the connection for the specified sender ID or all sender IDs if `None` is provided.
 
         Args:
-            sender_id (str | None): The sender ID to close the connection for. If `None`, all sender IDs will be closed.
+            sender_id (str | None): The sender ID to close the connection for. `None` for all.
 
         Returns:
             None
 
         """
         if sender_id is None:
-            for sender_id in self.apps:
+            for sender_id in set(self.apps.keys()):
                 await self._close_app(sender_id)
         else:
             await self._close_app(sender_id)
