@@ -23,10 +23,6 @@ async def test_aio_receive(fcm: FirebaseAdmin):
         SENDER_ID, APP_ID, API_KEY, FIREBASE_NAME
     )
 
-    @client.on_notification()
-    def on_notification(message: Message, data_message):
-        print(message)
-
     await client.add_app(SENDER_ID, fcm_cred, [])
     coroutine = await client.listen_coroutine(SENDER_ID)
 
@@ -40,7 +36,7 @@ async def test_aio_receive(fcm: FirebaseAdmin):
             await asyncio.sleep(0.5)
         return message
 
-    message: Message = await asyncio.wait_for(wait_notification(), timeout=10)
+    message: Message = await asyncio.wait_for(wait_notification(), timeout=15)
 
     assert message.notification.title == notification_title
     assert message.notification.body == notification_body

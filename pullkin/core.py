@@ -5,16 +5,19 @@ import json
 import os
 import secrets
 import time
+
 from asyncio import StreamReader, StreamWriter, Task
-from base64 import urlsafe_b64encode
+from base64 import urlsafe_b64encode, b64encode
 from dataclasses import dataclass, field
-from typing import Optional, TypedDict, Union
+from typing import Optional, Union
 from urllib.parse import urlencode
 
 from httpx import AsyncClient, Request
 from loguru import logger
 from oscrypto.asymmetric import generate_pair
+from pydantic import ValidationError
 
+from pullkin.exceptions import PullkinResponseError, PullkinRegistrationRetriesError
 from pullkin.models import AppCredentials, AppCredentialsGcm
 from pullkin.models.credentials import FirebaseInstallation, AppCredentialsKeys, AppCredentialsFcm
 from pullkin.proto.android_checkin_proto import AndroidCheckinProto, ChromeBuildProto
@@ -123,15 +126,18 @@ class PullkinCore:
         b64 = base64.b64encode(fid_byte_array).decode("utf-8")
         b64_safe = b64.replace("+", "-").replace("/", "_")
         fid = b64_safe[:22]
+
+        if "+" in fid or "/" in fid:
+            fid = cls.generate_fid()
         return fid
 
-    async def _do_request(self, req, retries=5):
+    async def _do_request(self, req, retries=5, decode=False) -> bytes | str:
         for _ in range(retries):
             try:
                 resp = await self.http_client.send(req, follow_redirects=True)
                 resp_data = resp.content
                 logger.debug(f"Response:\n{resp_data}")
-                return resp_data
+                return resp_data.decode("utf-8") if decode else resp_data
             except ValueError:
                 logger.exception("ValueError during send request")
             except (KeyboardInterrupt, asyncio.CancelledError):
@@ -166,7 +172,7 @@ class PullkinCore:
             url=self.FCM_INSTALLATION_ENDPOINT_PATTERN.format(firebase_project_id),
             headers=headers,
             json=data,
-            timeout=5,
+            timeout=8,
         )
         resp = await self._do_request(req)
 
@@ -187,6 +193,7 @@ class PullkinCore:
         firebase_project_id: str,
         firebase_installation: FirebaseInstallation,
         retries: int = 5,
+        current_retry: int = 0,
     ) -> tuple[AppCredentialsKeys, AppCredentialsFcm]:
         """
         Generates key pair and register a GCM token
@@ -205,7 +212,6 @@ class PullkinCore:
         # first byte of public key is skipped for some reason
         # maybe it's always zero
         public, private = generate_pair("ec", curve=self.unicode("secp256r1"))
-        from base64 import b64encode
 
         logger.debug(f"# Public key {b64encode(public.asn1.dump())}")
         logger.debug(f"# Private key {b64encode(private.asn1.dump())}")
@@ -237,9 +243,13 @@ class PullkinCore:
             headers=headers,
             json=body,
         )
-        resp_data = await self._do_request(req, retries)
+        resp_data = await self._do_request(req, retries, decode=True)
 
-        fcm = AppCredentialsFcm.model_validate_json(resp_data.decode("utf-8"))
+        try:
+            fcm = AppCredentialsFcm.model_validate_json(resp_data)
+        except ValidationError as e:
+            logger.exception(e)
+            raise PullkinResponseError(f"Failed to parse FCM response: {resp_data}") from e
 
         return keys, fcm
 
@@ -294,6 +304,7 @@ class PullkinCore:
         app_name: str = "org.chromium.linux",
         firebase_project_id: str | None = None,
         retries: int = 5,
+        current_retry: int = 0,
         **_,
     ) -> AppCredentialsGcm:
         """
@@ -372,28 +383,27 @@ class PullkinCore:
             data=body,
         )
 
-        for _ in range(retries):
-            resp_data = await self._do_request(req, retries)
 
-            if b"Error" in resp_data:
-                err = resp_data.decode("utf-8")
-                logger.error(f"Register request has failed with {err}")
-                continue
-            token = resp_data.decode("utf-8").split("=")[1]
+        resp_data = await self._do_request(req, retries, decode=True)
 
-            gcm_credentials = AppCredentialsGcm(
-                token=token,
-                app_id=app_id,
-                android_id=checkin_result.android_id,
-                security_token=checkin_result.security_token,
-                installation=installation_result,
-            )
+        if "Error" in resp_data:
+            logger.error(f"Register request has failed with {resp_data}")
+            raise PullkinResponseError(f"GCM registration error: {resp_data}")
 
-            logger.debug(f"Gcm register return data {gcm_credentials}")
 
-            return gcm_credentials
+        token = resp_data.split("=")[1]
 
-        raise ValueError(f"Register error after {retries=}")
+        gcm_credentials = AppCredentialsGcm(
+            token=token,
+            app_id=app_id,
+            android_id=checkin_result.android_id,
+            security_token=checkin_result.security_token,
+            installation=installation_result,
+        )
+
+        logger.debug(f"Gcm register return data {gcm_credentials}")
+
+        return gcm_credentials
 
     async def register(
         self,
@@ -422,36 +432,48 @@ class PullkinCore:
 
         Returns AppCredentialsGcm
         """
-        gcm = await self.gcm_register(
-            sender_id=str(sender_id),
-            app_id=app_id,
-            api_key=api_key,
-            android_cert=android_cert,
-            app_name=app_name,
-            firebase_project_id=firebase_project_id,
-            retries=retries,
-        )
-        logger.debug(f"GCM subscription data: {gcm}")
+        current_retry = 0
+        errors: list[PullkinResponseError] = []
 
-        if gcm.installation is not None:
-            keys, fcm = await self.new_fcm_register(
-                gcm_token=gcm.token,
-                api_key=api_key,
-                firebase_project_id=firebase_project_id,
-                firebase_installation=gcm.installation,
-                retries=retries,
-            )
-        else:
-            keys = fcm = None
+        while current_retry < retries:
+            try:
+                gcm = await self.gcm_register(
+                    sender_id=str(sender_id),
+                    app_id=app_id,
+                    api_key=api_key,
+                    android_cert=android_cert,
+                    app_name=app_name,
+                    firebase_project_id=firebase_project_id,
+                    retries=retries,
+                )
+                logger.debug(f"GCM subscription data: {gcm}")
 
-        # keys, fcm = await self.fcm_register(sender_id=sender_id, gcm_token=gcm.token)
-        logger.debug(f"FCM subscription data: {fcm}")
+                if gcm.installation is not None:
+                    keys, fcm = await self.new_fcm_register(
+                        gcm_token=gcm.token,
+                        api_key=api_key,
+                        firebase_project_id=firebase_project_id,
+                        firebase_installation=gcm.installation,
+                        retries=retries,
+                    )
+                else:
+                    keys = fcm = None
 
-        return AppCredentials(
-            gcm=gcm,
-            fcm=fcm,
-            keys=keys,
-        )
+                # keys, fcm = await self.fcm_register(sender_id=sender_id, gcm_token=gcm.token)
+                logger.debug(f"FCM subscription data: {fcm}")
+
+                return AppCredentials(
+                    gcm=gcm,
+                    fcm=fcm,
+                    keys=keys,
+                )
+            except PullkinResponseError as e:
+                current_retry += 1
+                logger.error(f"Failed to register: {e}")
+                errors.append(e)
+                continue
+
+        raise PullkinRegistrationRetriesError(f"Failed to register after {retries} retries", errors)
 
     @classmethod
     def _encode_varint32(cls, x):
