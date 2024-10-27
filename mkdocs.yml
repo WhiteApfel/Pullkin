@@ -28,7 +28,7 @@ theme:
 nav:
 - Main: index.md
 - Guide:
-  - Install: guide/installation.md
+  - Install: guide/install.md
   - Main methods: guide/methods.md
   - Example: guide/examples.md
 - API:
